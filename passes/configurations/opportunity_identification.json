@@ -1,0 +1,81 @@
+{
+    "pass_type": "opportunity_identification",
+    "purpose": "Identify potential opportunities, improvements, or positive actions mentioned in the document",
+    "instructions": "Analyze the document for explicit or implicit mentions of opportunities, suggestions, improvements, or positive possibilities.",
+    "process_by_chunks": false,
+    "prompt_template": """
+    You are an expert opportunity identifier. Your task is to analyze the following document and identify any opportunities, improvements, suggestions, or positive possibilities mentioned.
+
+    Document Summary:
+    {summary}
+
+    Original Document Information:
+    - Document Type: {document_info.get('is_meeting_transcript', False) and 'Meeting Transcript' or 'Document'}
+    - Main Topics: {', '.join(document_info.get('preview_analysis', {}).get('key_topics', []))}
+
+    For each opportunity you identify, please provide:
+    1. A clear, concise title
+    2. A detailed description of the opportunity
+    3. The potential impact level (transformative, high, medium, or low)
+    4. Who suggested the opportunity (if known)
+    5. Context or specific text that mentions the opportunity
+
+    Focus on genuine opportunities that could create value, solve problems, or improve situations mentioned in the document.
+    """,
+    "format_template": """
+    # Opportunities Identified
+
+    {% for opportunity in opportunities %}
+    ## {{opportunity.title}}
+
+    **Impact:** {{opportunity.impact}}
+
+    {{opportunity.description}}
+
+    {% if opportunity.suggested_by %}**Suggested by:** {{opportunity.suggested_by}}{% endif %}
+
+    {% if opportunity.context %}**Context:** "{{opportunity.context}}"{% endif %}
+
+    {% endfor %}
+    """,
+    "output_schema": {
+        "type": "object",
+        "properties": {
+            "opportunities": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {
+                            "type": "string",
+                            "description": "A short title for the opportunity"
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "A detailed description of the opportunity"
+                        },
+                        "impact": {
+                            "type": "string",
+                            "enum": ["transformative", "high", "medium", "low"],
+                            "description": "The potential impact level of the opportunity"
+                        },
+                        "suggested_by": {
+                            "type": "string",
+                            "description": "The person who suggested the opportunity (if known)"
+                        },
+                        "context": {
+                            "type": "string",
+                            "description": "Text from the document that mentions this opportunity"
+                        }
+                    },
+                    "required": ["title", "description", "impact"]
+                }
+            },
+            "summary": {
+                "type": "string",
+                "description": "A brief summary of the opportunities identified"
+            }
+        },
+        "required": ["opportunities"]
+    }
+}

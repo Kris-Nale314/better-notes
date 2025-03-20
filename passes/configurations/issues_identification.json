@@ -1,0 +1,81 @@
+{
+    "pass_type": "issue_identification",
+    "purpose": "Analyze the document to identify and describe any issues, problems, or challenges mentioned",
+    "instructions": "Carefully examine the document for any explicit or implicit mentions of issues, problems, roadblocks, challenges, or risks. Extract each issue and provide a concise description.",
+    "process_by_chunks": false,
+    "prompt_template": """
+    You are an expert issue identifier. Your task is to analyze the following document and identify any issues, problems, challenges, risks, or concerns mentioned.
+
+    Document Summary:
+    {summary}
+
+    Original Document Information:
+    - Document Type: {document_info.get('is_meeting_transcript', False) and 'Meeting Transcript' or 'Document'}
+    - Main Topics: {', '.join(document_info.get('preview_analysis', {}).get('key_topics', []))}
+
+    For each issue you identify, please provide:
+    1. A clear, concise title
+    2. A detailed description of the issue
+    3. The severity level (critical, high, medium, or low)
+    4. Who mentioned the issue (if known)
+    5. Context or specific text that mentions the issue
+
+    Please be thorough but focus on substantive issues rather than minor concerns.
+    """,
+    "format_template": """
+    # Issues Identified
+
+    {% for issue in issues %}
+    ## {{issue.title}}
+
+    **Severity:** {{issue.severity}}
+
+    {{issue.description}}
+
+    {% if issue.speaker %}**Mentioned by:** {{issue.speaker}}{% endif %}
+
+    {% if issue.context %}**Context:** "{{issue.context}}"{% endif %}
+
+    {% endfor %}
+    """,
+    "output_schema": {
+        "type": "object",
+        "properties": {
+            "issues": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {
+                            "type": "string",
+                            "description": "A short title for the issue"
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "A detailed description of the issue"
+                        },
+                        "severity": {
+                            "type": "string",
+                            "enum": ["critical", "high", "medium", "low"],
+                            "description": "The severity level of the issue"
+                        },
+                        "speaker": {
+                            "type": "string",
+                            "description": "The person who mentioned the issue (if known)"
+                        },
+                        "context": {
+                            "type": "string",
+                            "description": "Text from the document that mentions this issue"
+                        }
+                    },
+                    "required": ["title", "description", "severity"]
+                }
+            },
+            "summary": {
+                "type": "string",
+                "description": "A brief summary of the issues identified"
+            }
+        },
+        "required": ["issues"]
+    }
+}

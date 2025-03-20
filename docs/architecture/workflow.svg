@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <!-- Background -->
+  <rect width="800" height="600" fill="#f9f9f9"/>
+  
+  <!-- Title -->
+  <text x="400" y="35" font-family="Arial" font-size="24" text-anchor="middle" font-weight="bold">Better Notes System Flow</text>
+  
+  <!-- Input Document Box -->
+  <rect x="50" y="70" width="130" height="60" rx="10" ry="10" fill="#e1f5fe" stroke="#0277bd" stroke-width="2"/>
+  <text x="115" y="105" font-family="Arial" font-size="14" text-anchor="middle">Input Document</text>
+  
+  <!-- Document Analyzer -->
+  <rect x="50" y="170" width="130" height="60" rx="10" ry="10" fill="#fff9c4" stroke="#fbc02d" stroke-width="2"/>
+  <text x="115" y="195" font-family="Arial" font-size="14" text-anchor="middle">Document</text>
+  <text x="115" y="215" font-family="Arial" font-size="14" text-anchor="middle">Analyzer</text>
+  
+  <!-- DocumentChunker -->
+  <rect x="50" y="270" width="130" height="60" rx="10" ry="10" fill="#c8e6c9" stroke="#4caf50" stroke-width="2"/>
+  <text x="115" y="295" font-family="Arial" font-size="14" text-anchor="middle">Document</text>
+  <text x="115" y="315" font-family="Arial" font-size="14" text-anchor="middle">Chunker</text>
+  
+  <!-- Booster -->
+  <rect x="50" y="370" width="130" height="60" rx="10" ry="10" fill="#d1c4e9" stroke="#673ab7" stroke-width="2"/>
+  <text x="115" y="405" font-family="Arial" font-size="14" text-anchor="middle">Booster</text>
+  
+  <!-- Options -->
+  <rect x="250" y="70" width="130" height="100" rx="10" ry="10" fill="#ffccbc" stroke="#e64a19" stroke-width="2"/>
+  <text x="315" y="95" font-family="Arial" font-size="14" text-anchor="middle">ProcessingOptions</text>
+  <text x="315" y="120" font-family="Arial" font-size="12" text-anchor="middle">- model_name</text>
+  <text x="315" y="140" font-family="Arial" font-size="12" text-anchor="middle">- min_chunks</text>
+  <text x="315" y="160" font-family="Arial" font-size="12" text-anchor="middle">- detail_level</text>
+  
+  <!-- Chunked Texts -->
+  <rect x="250" y="270" width="130" height="60" rx="10" ry="10" fill="#c8e6c9" stroke="#4caf50" stroke-width="2"/>
+  <text x="315" y="295" font-family="Arial" font-size="14" text-anchor="middle">Chunked</text>
+  <text x="315" y="315" font-family="Arial" font-size="14" text-anchor="middle">Document</text>
+  
+  <!-- ChunkSummarizer -->
+  <rect x="250" y="370" width="130" height="60" rx="10" ry="10" fill="#bbdefb" stroke="#1976d2" stroke-width="2"/>
+  <text x="315" y="405" font-family="Arial" font-size="14" text-anchor="middle">ChunkSummarizer</text>
+  
+  <!-- Chunk Results -->
+  <rect x="250" y="470" width="130" height="60" rx="10" ry="10" fill="#bbdefb" stroke="#1976d2" stroke-width="2"/>
+  <text x="315" y="495" font-family="Arial" font-size="14" text-anchor="middle">Chunk</text>
+  <text x="315" y="515" font-family="Arial" font-size="14" text-anchor="middle">Summaries</text>
+  
+  <!-- Synthesizer -->
+  <rect x="450" y="370" width="130" height="60" rx="10" ry="10" fill="#f8bbd0" stroke="#c2185b" stroke-width="2"/>
+  <text x="515" y="405" font-family="Arial" font-size="14" text-anchor="middle">Synthesizer</text>
+  
+  <!-- Final Summary -->
+  <rect x="450" y="470" width="130" height="60" rx="10" ry="10" fill="#f8bbd0" stroke="#c2185b" stroke-width="2"/>
+  <text x="515" y="505" font-family="Arial" font-size="14" text-anchor="middle">Final Summary</text>
+  
+  <!-- Pass Processors -->
+  <rect x="450" y="270" width="130" height="60" rx="10" ry="10" fill="#ffe0b2" stroke="#ff9800" stroke-width="2"/>
+  <text x="515" y="295" font-family="Arial" font-size="14" text-anchor="middle">Pass</text>
+  <text x="515" y="315" font-family="Arial" font-size="14" text-anchor="middle">Processors</text>
+  
+  <!-- Pass Results -->
+  <rect x="650" y="270" width="130" height="60" rx="10" ry="10" fill="#ffe0b2" stroke="#ff9800" stroke-width="2"/>
+  <text x="715" y="295" font-family="Arial" font-size="14" text-anchor="middle">Pass</text>
+  <text x="715" y="315" font-family="Arial" font-size="14" text-anchor="middle">Results</text>
+  
+  <!-- SummaryRefiner -->
+  <rect x="650" y="370" width="130" height="60" rx="10" ry="10" fill="#b39ddb" stroke="#512da8" stroke-width="2"/>
+  <text x="715" y="395" font-family="Arial" font-size="14" text-anchor="middle">Summary</text>
+  <text x="715" y="415" font-family="Arial" font-size="14" text-anchor="middle">Refiner</text>
+  
+  <!-- Final Output -->
+  <rect x="650" y="470" width="130" height="60" rx="10" ry="10" fill="#81d4fa" stroke="#0288d1" stroke-width="2"/>
+  <text x="715" y="505" font-family="Arial" font-size="14" text-anchor="middle">Final Output</text>
+  
+  <!-- Orchestrator -->
+  <rect x="350" y="170" width="300" height="60" rx="10" ry="10" fill="#dcedc8" stroke="#689f38" stroke-width="2"/>
+  <text x="500" y="205" font-family="Arial" font-size="16" text-anchor="middle" font-weight="bold">Orchestrator</text>
+  
+  <!-- Arrows -->
+  <!-- Input to Analyzer -->
+  <line x1="115" y1="130" x2="115" y2="170" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Options to Orchestrator -->
+  <line x1="315" y1="170" x2="350" y2="200" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Analyzer to Chunker -->
+  <line x1="115" y1="230" x2="115" y2="270" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Chunker to Chunked Document -->
+  <line x1="180" y1="300" x2="250" y2="300" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Chunker to Booster -->
+  <line x1="115" y1="330" x2="115" y2="370" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Chunked Document to Summarizer -->
+  <line x1="315" y1="330" x2="315" y2="370" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Booster to Summarizer -->
+  <line x1="180" y1="400" x2="250" y2="400" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Summarizer to Chunk Summaries -->
+  <line x1="315" y1="430" x2="315" y2="470" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Chunk Summaries to Synthesizer -->
+  <line x1="380" y1="500" x2="450" y2="400" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Orchestrator to Pass Processors -->
+  <line x1="500" y1="230" x2="500" y2="270" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Pass Processors to Pass Results -->
+  <line x1="580" y1="300" x2="650" y2="300" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Synthesizer to Final Summary -->
+  <line x1="515" y1="430" x2="515" y2="470" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Final Summary to Summary Refiner -->
+  <line x1="580" y1="500" x2="650" y2="400" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Pass Results to Final Output -->
+  <line x1="715" y1="330" x2="715" y2="370" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Summary Refiner to Final Output -->
+  <line x1="715" y1="430" x2="715" y2="470" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Arrowhead Marker -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#333" />
+    </marker>
+  </defs>
+</svg>

@@ -1,0 +1,62 @@
+{
+    "pass_type": "action_items",
+    "purpose": "Extract specific tasks, assignments, or follow-up items mentioned in the document",
+    "instructions": "Identify all action items, tasks, assignments, and commitments made during the meeting or outlined in the document.",
+    "process_by_chunks": true,
+    "chunk_prompt_template": """
+    You are an expert action item extractor. Your task is to analyze the following document section and identify any action items, tasks, assignments, or commitments mentioned.
+
+    Document Section:
+    {chunk_text}
+
+    Position in document: {chunk_position}
+
+    For each action item you identify, please provide:
+    1. The task or action to be performed
+    2. The owner or person responsible for the task (if mentioned)
+    3. Any deadline or timeframe mentioned
+    4. A brief description or context for the action
+
+    Extract only clear action items that involve specific tasks to be performed. Avoid general statements or suggestions that don't involve clear commitment.
+    """,
+    "format_template": """
+    # Action Items
+
+    {% for action in actions %}
+    - **{{action.task}}** {% if action.owner %}(Owner: {{action.owner}}){% endif %} {% if action.deadline %}Due: {{action.deadline}}{% endif %}
+      {% if action.description %}{{action.description}}{% endif %}
+    
+    {% endfor %}
+    """,
+    "output_schema": {
+        "type": "object",
+        "properties": {
+            "actions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "task": {
+                            "type": "string",
+                            "description": "The action or task to be performed"
+                        },
+                        "owner": {
+                            "type": "string",
+                            "description": "The person responsible for completing the task"
+                        },
+                        "deadline": {
+                            "type": "string",
+                            "description": "When the task should be completed"
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Additional context or explanation for the action"
+                        }
+                    },
+                    "required": ["task"]
+                }
+            }
+        },
+        "required": ["actions"]
+    }
+}

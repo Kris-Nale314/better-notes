@@ -1,0 +1,21 @@
+streamlit
+openai
+python-dotenv
+tiktoken
+langchain
+langchain-community
+langchain-openai
+nltk
+spacy
+transformers
+
+# Utilities
+requests
+aiohttp
+numpy
+pandas
+
+# Development tools
+pytest
+pytest-asyncio
+black
