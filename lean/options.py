@@ -1,36 +1,66 @@
 # lean/options.py
-from dataclasses import dataclass
-from typing import Optional, List
+from dataclasses import dataclass, field
+from typing import Optional, List, Dict, Any, Union, Tuple
 
 @dataclass
 class ProcessingOptions:
-    """Configuration options for document processing."""
+    """
+    Configuration options for document processing and summarization.
 
-    # Model configuration
+    This class uses dataclasses for concise definition and easy initialization.
+    It includes options for model selection, chunking, summarization,
+    performance, and pass selection.
+    """
+
+    # --- Core Model Settings ---
     model_name: str = "gpt-3.5-turbo"  # Default model
-    temperature: float = 0.2  # Default temperature
+    temperature: float = 0.2  # Default temperature for consistent results
 
-    # Chunking parameters
-    min_chunks: int = 3
-    max_chunk_size: Optional[int] = None
+    # --- Chunking Settings ---
+    min_chunks: int = 3  # Minimum number of chunks
+    max_chunk_size: Optional[int] = None  # Auto-calculated if None
 
-    # Analysis options
-    preview_length: int = 2000
+    # --- Summarization Settings ---
+    detail_level: str = "detailed"  # Options: "essential", "detailed", "detailed-complex"
 
-    # Summary options
-    detail_level: str = "detailed"  # 'essential', 'detailed', 'detailed-complex'
-    include_action_items: bool = True  # No longer used directly, but kept for compatibility
+    # --- Analysis/Preview Settings ---
+    preview_length: int = 2000 # Number of characters for document analysis
 
-    # Performance options
-    max_concurrent_chunks: int = 5
-    enable_caching: bool = True       # NEW: Enable/disable caching
-    cache_dir: str = ".cache"       # NEW: Cache directory
+    # --- Performance Settings ---
+    max_concurrent_chunks: int = 5  # Max concurrent chunk processing
+    enable_caching: bool = True  # Enable/disable caching
+    cache_dir: str = ".cache"  # Cache directory
 
-    # Output options
-    include_metadata: bool = True
+    # --- Output Settings ---
+    include_metadata: bool = True  # Include metadata in the output
 
-    # User guidance
-    user_instructions: Optional[str] = None
+    # --- User Instructions ---
+    user_instructions: Optional[str] = None  # Custom instructions for the LLM
 
-    # Passes to run
-    passes: List[str] = None  # List of pass types to run
+    # --- Pass Selection ---
+    passes: List[str] = field(default_factory=list)  # List of pass types to run
+
+    # --- Pass-Specific Options (NEW) ---
+    pass_options: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    #  Example:
+    #  pass_options = {
+    #     "issue_identification": {"severity_threshold": "medium"},
+    #     "opportunity_identification": {"min_impact": "high"}
+    #  }
+
+    # --- Refinement options --- #Future use
+    refinement_type: Optional[str] = None
+    custom_instructions: Optional[str] = None
+
+    def get_pass_options(self, pass_type: str) -> Dict[str, Any]:
+        """
+        Retrieves the pass-specific options for a given pass type.
+
+        Args:
+            pass_type: The type of the pass (e.g., "issue_identification").
+
+        Returns:
+            A dictionary of options for the specified pass, or an empty
+            dictionary if no options are defined for that pass.
+        """
+        return self.pass_options.get(pass_type, {})

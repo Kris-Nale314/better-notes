@@ -11,6 +11,9 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+from lean.options import ProcessingOptions
+
+
 # Check for OpenAI API key
 api_key = os.environ.get("OPENAI_API_KEY")
 if not api_key:
@@ -19,8 +22,8 @@ if not api_key:
     print("Please set your API key in a .env file or environment variable.")
 
 # Create necessary directories
-for directory in ["data", "outputs", ".cache"]:
-    Path(directory).mkdir(exist_ok=True)
+for directory in ["data", "outputs", ".cache", "passes/configurations"]:
+    Path(directory).mkdir(exist_ok=True, parents=True)
 
 # Configure Streamlit page
 st.set_page_config(
@@ -38,7 +41,8 @@ Better Notes is an AI-powered document analysis tool that helps you:
 
 - **Extract Key Information** from lengthy documents and transcripts
 - **Generate Well-Structured Summaries** with adjustable detail levels
-- **Identify Action Items** and other important elements
+- **Identify Issues and Opportunities** to improve decision making
+- **Extract Action Items** to ensure follow-through
 - **Save Time** processing meeting notes, research, and other text
 
 Use the sidebar navigation to access different features:
@@ -58,14 +62,32 @@ with col1:
     [Open Summarization](/Summary)
     """)
 
+    st.markdown("""
+    ### 💡 Opportunity Identification
+    
+    Discover potential improvements, innovations and
+    possibilities mentioned or implied in your documents.
+    
+    [Open Opportunity Identification](/Opportunity_Identification)
+    """)
+
 with col2:
     st.markdown("""
-    ### 🔬 Specialized Analysis
+    ### 🔍 Issue Identification
     
-    Extract specific information types from your documents 
-    including action items, issues, and opportunities.
+    Extract problems, challenges, and areas of concern 
+    from your documents to focus improvement efforts.
     
-    *Coming soon...*
+    [Open Issue Identification](/Issue_Identification)
+    """)
+    
+    st.markdown("""
+    ### ✅ Action Item Extraction
+    
+    Identify tasks, assignments, commitments, and follow-up
+    items to ensure nothing falls through the cracks.
+    
+    [Open Action Items](/Action_Items)
     """)
 
 # App information in expander
@@ -77,9 +99,10 @@ with st.expander("About Better Notes"):
     
     1. **Smart Chunking**: Divides documents into meaningful sections
     2. **Multi-level Processing**: Analyzes text at different granularities
-    3. **Hierarchical Synthesis**: Combines information into a coherent whole
+    3. **Specialized Passes**: Applies targeted analysis for different information types
+    4. **Hierarchical Synthesis**: Combines information into a coherent whole
     
-    The application is built with a modular design that allows for easy extension
+    The application is built with a modular design that makes it easy to extend
     with new capabilities through the "passes" system.
     
     ## Technologies
@@ -87,13 +110,17 @@ with st.expander("About Better Notes"):
     - **Backend**: Python with AsyncIO for efficient processing
     - **Frontend**: Streamlit for a simple, interactive user interface
     - **AI**: OpenAI's GPT models for text analysis and generation
+    - **Architecture**: Lean, modular design with specialized processors
     
     ## Getting Started
     
-    1. Navigate to the Summarization page using the sidebar
-    2. Upload a document or paste text
+    1. Select a processing type from the sidebar navigation
+    2. Upload a document (text files work best)
     3. Adjust processing options as needed
-    4. Generate your enhanced notes
+    4. Generate your enhanced analysis
+    
+    For best results, ensure you're using a clean text document. Meeting
+    transcripts, reports, articles, and research papers work particularly well.
     """)
 
 # Check for API key
@@ -105,4 +132,4 @@ if not api_key:
 
 # Display version
 st.sidebar.markdown("---")
-st.sidebar.caption("Better Notes v0.1.0")
+st.sidebar.caption("Better Notes v0.1.1")

@@ -1,26 +1,49 @@
 {
     "pass_type": "opportunity_identification",
-    "purpose": "Identify potential opportunities, improvements, or positive actions mentioned in the document",
-    "instructions": "Analyze the document for explicit or implicit mentions of opportunities, suggestions, improvements, or positive possibilities.",
+    "purpose": "Identify potential opportunities, improvements, and positive actions mentioned or implied in the document",
+    "instructions": "Analyze the document for explicit and implicit opportunities, improvements, suggestions, and possibilities. Extract each opportunity and provide a detailed description along with potential implementation steps.",
     "process_by_chunks": false,
     "prompt_template": """
-    You are an expert opportunity identifier. Your task is to analyze the following document and identify any opportunities, improvements, suggestions, or positive possibilities mentioned.
+    You are an expert opportunity analyst. Your task is to carefully analyze the following document to identify opportunities, improvements, innovations, and positive possibilities.
 
     Document Summary:
     {summary}
 
-    Original Document Information:
+    Document Information:
     - Document Type: {document_info.get('is_meeting_transcript', False) and 'Meeting Transcript' or 'Document'}
-    - Main Topics: {', '.join(document_info.get('preview_analysis', {}).get('key_topics', []))}
+    - Topics: {', '.join(document_info.get('preview_analysis', {}).get('key_topics', [])) if document_info.get('preview_analysis') and isinstance(document_info.get('preview_analysis'), dict) else 'Various topics'}
+
+    User Instructions: {options.user_instructions if options.user_instructions else 'Identify significant opportunities for improvement.'}
 
     For each opportunity you identify, please provide:
-    1. A clear, concise title
-    2. A detailed description of the opportunity
+    1. A clear, descriptive title
+    2. A detailed description of the opportunity, its benefits, and potential value
     3. The potential impact level (transformative, high, medium, or low)
-    4. Who suggested the opportunity (if known)
-    5. Context or specific text that mentions the opportunity
+    4. Who suggested or is associated with the opportunity (if identifiable)
+    5. Relevant context or direct quotes from the document
+    6. 2-3 initial implementation steps (if appropriate)
 
-    Focus on genuine opportunities that could create value, solve problems, or improve situations mentioned in the document.
+    TRANSFORMATIVE impact opportunities are those that:
+    - Could fundamentally change how things operate
+    - Have potential for massive value creation or cost savings
+    - Represent innovative or breakthrough approaches
+
+    HIGH impact opportunities are those that:
+    - Would significantly improve effectiveness or efficiency
+    - Provide substantial value or cost savings
+    - Address important pain points or challenges
+
+    MEDIUM impact opportunities are those that:
+    - Offer meaningful improvements to existing processes
+    - Provide moderate value or cost savings
+    - Are relatively straightforward to implement
+
+    LOW impact opportunities are those that:
+    - Represent minor enhancements or refinements
+    - Provide incremental value or small cost savings
+    - Are very easy to implement "quick wins"
+
+    Focus on the most impactful opportunities first. Look for both explicit suggestions and implicit opportunities that might not be directly stated. Provide specific context when possible.
     """,
     "format_template": """
     # Opportunities Identified
@@ -32,11 +55,22 @@
 
     {{opportunity.description}}
 
+    {% if opportunity.implementation_steps %}
+    **Implementation Steps:**
+    {% for step in opportunity.implementation_steps %}
+    - {{step}}
+    {% endfor %}
+    {% endif %}
+
     {% if opportunity.suggested_by %}**Suggested by:** {{opportunity.suggested_by}}{% endif %}
 
     {% if opportunity.context %}**Context:** "{{opportunity.context}}"{% endif %}
 
     {% endfor %}
+
+    ## Summary
+
+    {{summary}}
     """,
     "output_schema": {
         "type": "object",
@@ -48,11 +82,11 @@
                     "properties": {
                         "title": {
                             "type": "string",
-                            "description": "A short title for the opportunity"
+                            "description": "A short, descriptive title for the opportunity"
                         },
                         "description": {
                             "type": "string",
-                            "description": "A detailed description of the opportunity"
+                            "description": "A clear description of the opportunity, its benefits, and potential value"
                         },
                         "impact": {
                             "type": "string",
@@ -61,11 +95,18 @@
                         },
                         "suggested_by": {
                             "type": "string",
-                            "description": "The person who suggested the opportunity (if known)"
+                            "description": "The person who suggested or is associated with this opportunity"
                         },
                         "context": {
                             "type": "string",
-                            "description": "Text from the document that mentions this opportunity"
+                            "description": "Relevant text from the document that mentions or implies this opportunity"
+                        },
+                        "implementation_steps": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "Initial steps to implement this opportunity"
                         }
                     },
                     "required": ["title", "description", "impact"]
@@ -73,9 +114,9 @@
             },
             "summary": {
                 "type": "string",
-                "description": "A brief summary of the opportunities identified"
+                "description": "A brief summary of the key opportunities identified"
             }
         },
-        "required": ["opportunities"]
+        "required": ["opportunities", "summary"]
     }
 }

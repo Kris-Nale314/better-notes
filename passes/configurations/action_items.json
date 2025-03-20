@@ -1,23 +1,32 @@
 {
     "pass_type": "action_items",
-    "purpose": "Extract specific tasks, assignments, or follow-up items mentioned in the document",
-    "instructions": "Identify all action items, tasks, assignments, and commitments made during the meeting or outlined in the document.",
+    "purpose": "Extract tasks, assignments, follow-up items, and commitments from the document",
+    "instructions": "Identify any tasks, assignments, commitments, or follow-up activities mentioned in the document. Extract the task, owner, deadline, and contextual details.",
     "process_by_chunks": true,
     "chunk_prompt_template": """
-    You are an expert action item extractor. Your task is to analyze the following document section and identify any action items, tasks, assignments, or commitments mentioned.
+    You are an expert at identifying action items. Your task is to analyze the following document section and extract any tasks, commitments, follow-up items, or assignments.
 
     Document Section:
     {chunk_text}
 
     Position in document: {chunk_position}
 
+    User Instructions: {options.user_instructions if options.user_instructions else 'Extract all action items, including their owners and deadlines where mentioned.'}
+
     For each action item you identify, please provide:
-    1. The task or action to be performed
+    1. The specific task or action to be performed
     2. The owner or person responsible for the task (if mentioned)
-    3. Any deadline or timeframe mentioned
+    3. Any deadline or timeframe (if mentioned)
     4. A brief description or context for the action
 
-    Extract only clear action items that involve specific tasks to be performed. Avoid general statements or suggestions that don't involve clear commitment.
+    Look for:
+    - Explicit assignments: "John will prepare the report"
+    - Commitments: "I'll take care of that"
+    - Tasks with deadlines: "Complete the review by Friday"
+    - Follow-up items: "We need to circle back on this"
+    - Decisions requiring action: "We decided to update the policy"
+
+    Be thorough but focus on clear action items rather than vague statements.
     """,
     "format_template": """
     # Action Items
@@ -38,7 +47,7 @@
                     "properties": {
                         "task": {
                             "type": "string",
-                            "description": "The action or task to be performed"
+                            "description": "The specific task or action to be performed"
                         },
                         "owner": {
                             "type": "string",

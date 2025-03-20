@@ -7,6 +7,7 @@ Manages the flow from document input to summary output.
 import logging
 import time
 import asyncio
+import importlib
 from typing import Dict, Any, List, Optional, Callable, Union
 
 from .async_openai_adapter import AsyncOpenAIAdapter
@@ -57,6 +58,24 @@ class SummarizerFactory:
         else:
             booster = None
         
+        # Create pass processors if requested
+        pass_processors = {}
+        if options.passes:
+            # Import the create_pass_processor dynamically to avoid circular imports
+            try:
+                passes_module = importlib.import_module('passes.passes')
+                create_pass_processor = getattr(passes_module, 'create_pass_processor')
+                
+                # Create pass processors
+                for pass_type in options.passes:
+                    pass_processor = create_pass_processor(pass_type, llm_client, options)
+                    if pass_processor:
+                        pass_processors[pass_type] = pass_processor
+                    else:
+                        logger.warning(f"Failed to create pass processor for {pass_type}")
+            except Exception as e:
+                logger.error(f"Error creating pass processors: {e}")
+        
         # Create orchestrator
         orchestrator = Orchestrator(
             llm_client=llm_client,
@@ -65,6 +84,7 @@ class SummarizerFactory:
             summarizer=summarizer,
             synthesizer=synthesizer,
             booster=booster,
+            pass_processors=pass_processors,
             options=options
         )
         
@@ -76,6 +96,7 @@ class SummarizerFactory:
             'summarizer': summarizer,
             'synthesizer': synthesizer,
             'booster': booster,
+            'pass_processors': pass_processors,
             'orchestrator': orchestrator
         }
 
@@ -93,6 +114,7 @@ class Orchestrator:
                  summarizer: ChunkSummarizer,
                  synthesizer: Synthesizer,
                  booster: Optional[Booster],
+                 pass_processors: Dict[str, Any],
                  options: ProcessingOptions):
         """
         Initialize the orchestrator with pipeline components.
@@ -104,6 +126,7 @@ class Orchestrator:
             summarizer: Chunk summarizer for processing chunks
             synthesizer: Synthesizer for combining chunk summaries
             booster: Optional booster for parallel processing
+            pass_processors: Dictionary of pass processors by pass type
             options: Processing options
         """
         self.llm_client = llm_client
@@ -112,6 +135,7 @@ class Orchestrator:
         self.summarizer = summarizer
         self.synthesizer = synthesizer
         self.booster = booster
+        self.pass_processors = pass_processors
         self.options = options
         
         # Initialize refiner if available
@@ -140,8 +164,16 @@ class Orchestrator:
         start_time = time.time()
         
         try:
+            # Calculate progress increments based on whether passes are being run
+            has_passes = bool(self.pass_processors)
+            
+            # Base steps: analysis, chunking, summarization, synthesis = 4 steps
+            # If passes: add 1 step for all passes combined
+            total_steps = 4 + (1 if has_passes else 0)
+            current_step = 0
+            
             # --- Step 1: Document Analysis ---
-            self._update_progress(progress_callback, 0.1, "Analyzing document...")
+            self._update_progress(progress_callback, current_step / total_steps, "Analyzing document...")
             
             document_info = await self.analyzer.analyze_preview(
                 document_text[:self.options.preview_length],
@@ -150,10 +182,11 @@ class Orchestrator:
             document_info['original_text_length'] = len(document_text)
             document_info['user_instructions'] = self.options.user_instructions
             
-            self._update_progress(progress_callback, 0.2, "Document analysis complete")
+            current_step += 1
+            self._update_progress(progress_callback, current_step / total_steps, "Document analysis complete")
             
             # --- Step 2: Document Chunking ---
-            self._update_progress(progress_callback, 0.2, "Chunking document...")
+            self._update_progress(progress_callback, current_step / total_steps, "Chunking document...")
             
             chunks = self.chunker.chunk_document(
                 document_text, 
@@ -162,14 +195,15 @@ class Orchestrator:
             )
             document_info['total_chunks'] = len(chunks)
             
+            current_step += 1
             self._update_progress(
                 progress_callback, 
-                0.3, 
+                current_step / total_steps, 
                 f"Document chunked into {len(chunks)} chunks"
             )
             
             # --- Step 3: Chunk Summarization ---
-            self._update_progress(progress_callback, 0.3, "Summarizing chunks...")
+            self._update_progress(progress_callback, current_step / total_steps, "Summarizing chunks...")
             
             # Process chunks in parallel if booster is available
             if self.booster and len(chunks) > 1:
@@ -185,21 +219,23 @@ class Orchestrator:
                     summary = await self._summarize_chunk_async(chunk)
                     chunk_summaries.append(summary)
                     
-                    # Update progress for each chunk
-                    chunk_progress = 0.3 + (0.4 * (i + 1) / len(chunks))
+                    # Update sub-progress for each chunk
+                    chunk_fraction = (i + 1) / len(chunks)
+                    sub_progress = current_step / total_steps + (chunk_fraction / total_steps)
                     self._update_progress(
                         progress_callback,
-                        chunk_progress,
+                        sub_progress,
                         f"Summarized chunk {i+1}/{len(chunks)}"
                     )
             
             # Ensure chunks are in the correct order
             chunk_summaries.sort(key=lambda x: x.get('chunk_index', 0))
             
-            self._update_progress(progress_callback, 0.7, "Chunk summarization complete")
+            current_step += 1
+            self._update_progress(progress_callback, current_step / total_steps, "Chunk summarization complete")
             
             # --- Step 4: Summary Synthesis ---
-            self._update_progress(progress_callback, 0.7, "Creating final summary...")
+            self._update_progress(progress_callback, current_step / total_steps, "Creating final summary...")
             
             synthesis_result = await self.synthesizer.synthesize_summaries(
                 chunk_summaries,
@@ -207,10 +243,60 @@ class Orchestrator:
                 self.options.detail_level
             )
             
-            self._update_progress(progress_callback, 0.9, "Summary synthesis complete")
+            current_step += 1
+            self._update_progress(progress_callback, current_step / total_steps, "Summary synthesis complete")
             
-            # --- Step 5: Final Result Preparation ---
-            self._update_progress(progress_callback, 0.9, "Preparing final result...")
+            # --- Step 5: Run Passes (if any) ---
+            passes_results = {}
+            
+            if has_passes:
+                self._update_progress(progress_callback, current_step / total_steps, "Running analysis passes...")
+                
+                # Create prior_result for passing to passes
+                prior_result = {
+                    'synthesis_result': synthesis_result,
+                    'chunk_summaries': chunk_summaries,
+                    'document_info': document_info,
+                    'options': self.options
+                }
+                
+                # Execute each pass processor
+                pass_count = len(self.pass_processors)
+                for i, (pass_type, processor) in enumerate(self.pass_processors.items()):
+                    # Update progress for this pass
+                    pass_progress = current_step / total_steps + ((i / pass_count) / total_steps)
+                    self._update_progress(
+                        progress_callback, 
+                        pass_progress,
+                        f"Running {pass_type} pass..."
+                    )
+                    
+                    try:
+                        # Process the document with this pass
+                        pass_result = await processor.process_document(
+                            document_text=document_text,
+                            document_info=document_info,
+                            progress_callback=lambda prog, msg: self._update_pass_progress(
+                                progress_callback, 
+                                current_step / total_steps, 
+                                (i + prog) / pass_count / total_steps,
+                                f"{pass_type}: {msg}"
+                            ),
+                            prior_result=prior_result
+                        )
+                        
+                        # Store the result
+                        passes_results[pass_type] = pass_result
+                        
+                    except Exception as e:
+                        logger.error(f"Error processing pass {pass_type}: {e}")
+                        passes_results[pass_type] = {"error": str(e)}
+                
+                current_step += 1
+                self._update_progress(progress_callback, current_step / total_steps, "Pass processing complete")
+            
+            # --- Final Result Preparation ---
+            self._update_progress(progress_callback, 1.0, "Preparing final result...")
             
             # Calculate processing time
             processing_time = time.time() - start_time
@@ -230,6 +316,10 @@ class Orchestrator:
             # Add executive summary if available
             if 'executive_summary' in synthesis_result:
                 result['executive_summary'] = synthesis_result['executive_summary']
+            
+            # Add pass results if any
+            if passes_results:
+                result['passes'] = passes_results
             
             # Add chunk summaries if requested
             if self.options.include_metadata:
@@ -290,6 +380,27 @@ class Orchestrator:
         
         # Log progress
         logger.info(f"Progress {progress:.0%}: {message}")
+    
+    def _update_pass_progress(self,
+                            callback: Optional[Callable[[float, str], None]],
+                            base_progress: float,
+                            pass_progress: float,
+                            message: str) -> None:
+        """
+        Update progress for a specific pass.
+        
+        Args:
+            callback: Progress callback function
+            base_progress: Base progress value
+            pass_progress: Pass-specific progress increment
+            message: Status message
+        """
+        if callback:
+            total_progress = min(base_progress + pass_progress, 1.0)
+            try:
+                callback(total_progress, message)
+            except Exception as e:
+                logger.warning(f"Error in pass progress callback: {e}")
     
     def process_document_sync(self, 
                             document_text: str,
