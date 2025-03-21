@@ -1,9 +1,13 @@
 """
 UI enhancement utilities for Better Notes application.
 Provides styling and visual improvement functions for the Streamlit interface.
+Includes chat interface components.
 """
 
 import streamlit as st
+import asyncio
+import time
+from typing import List, Dict, Any, Callable, Optional
 
 def apply_custom_css():
     """
@@ -217,6 +221,62 @@ def apply_custom_css():
             border-left: 4px solid #6c5ce7;
             margin: 20px 0;
         }
+        
+        /* Chat interface styling */
+        .chat-container {
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            background-color: rgba(50, 50, 60, 0.2);
+            border: 1px solid rgba(100, 100, 120, 0.3);
+        }
+        
+        .chat-message {
+            padding: 10px 15px;
+            margin: 8px 0;
+            border-radius: 8px;
+            max-width: 85%;
+        }
+        
+        .user-message {
+            background-color: rgba(70, 130, 180, 0.2);
+            border: 1px solid rgba(70, 130, 180, 0.3);
+            margin-left: auto;
+            margin-right: 10px;
+            border-bottom-right-radius: 2px;
+        }
+        
+        .assistant-message {
+            background-color: rgba(60, 60, 70, 0.2);
+            border: 1px solid rgba(60, 60, 70, 0.3);
+            margin-right: auto;
+            margin-left: 10px;
+            border-bottom-left-radius: 2px;
+        }
+        
+        .chat-input-container {
+            padding: 10px;
+            background-color: rgba(60, 60, 70, 0.1);
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        
+        .quick-question-button {
+            margin: 0 5px 10px 0;
+            padding: 5px 10px;
+            border-radius: 15px;
+            background-color: rgba(108, 92, 231, 0.1);
+            border: 1px solid rgba(108, 92, 231, 0.3);
+            color: rgba(255, 255, 255, 0.9);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .quick-question-button:hover {
+            background-color: rgba(108, 92, 231, 0.2);
+            transform: translateY(-1px);
+        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -404,3 +464,148 @@ def format_log_entries(log_entries):
         log_html.append(f'<div class="log-entry">{entry}</div>')
     
     return "\n".join(log_html)
+
+# ---- Chat Interface Components ----
+
+def initialize_chat_state():
+    """Initialize session state variables for chat interface."""
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+    if "last_question" not in st.session_state:
+        st.session_state.last_question = ""
+
+def display_chat_interface(
+    llm_client, 
+    document_text: str,
+    summary_text: str,
+    document_info: Optional[Dict[str, Any]] = None
+):
+    """
+    Display a chat interface for interacting with the document.
+    
+    Args:
+        llm_client: LLM client for generating responses
+        document_text: Original document text
+        summary_text: Summary text generated from the document
+        document_info: Optional document metadata
+    """
+    initialize_chat_state()
+    
+    st.divider()
+    st.subheader("💬 Ask About This Document")
+    
+    # Chat message display container
+    chat_container = st.container()
+    
+    with chat_container:
+        # Display chat history
+        for message in st.session_state.chat_history:
+            role = message["role"]
+            content = message["content"]
+            
+            # Choose styling based on role
+            if role == "user":
+                message_class = "chat-message user-message"
+                prefix = "You: "
+            else:
+                message_class = "chat-message assistant-message"
+                prefix = "Assistant: "
+            
+            st.markdown(f"""
+                <div class="{message_class}">
+                    <strong>{prefix}</strong>{content}
+                </div>
+            """, unsafe_allow_html=True)
+    
+    # Quick question buttons
+    st.markdown("<div style='display: flex; flex-wrap: wrap;'>", unsafe_allow_html=True)
+    
+    quick_questions = [
+        "Can you provide more details?",
+        "What are the key points?",
+        "Simplify this for me",
+        "What action items were mentioned?"
+    ]
+    
+    # Create columns for the buttons
+    cols = st.columns(4)
+    for i, question in enumerate(quick_questions):
+        with cols[i]:
+            if st.button(question, key=f"quick_{i}"):
+                process_chat_question(llm_client, question, document_text, summary_text, document_info)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # User question input
+    with st.form(key="chat_form", clear_on_submit=True):
+        user_question = st.text_input(
+            "Your question:",
+            key="chat_input",
+            placeholder="Ask a question about this document..."
+        )
+        submit_button = st.form_submit_button("Send")
+        
+        if submit_button and user_question:
+            process_chat_question(llm_client, user_question, document_text, summary_text, document_info)
+
+def process_chat_question(
+    llm_client, 
+    question: str, 
+    document_text: str,
+    summary_text: str,
+    document_info: Optional[Dict[str, Any]] = None
+):
+    """
+    Process a chat question and add to history.
+    
+    Args:
+        llm_client: LLM client for generating responses
+        question: User's question
+        document_text: Original document text
+        summary_text: Summary text generated from the document
+        document_info: Optional document metadata
+    """
+    # Add user message to chat history
+    st.session_state.chat_history.append({"role": "user", "content": question})
+    
+    # Create a placeholder for the assistant's response
+    with st.spinner("Thinking..."):
+        # Generate context
+        truncated_doc = document_text[:3000]
+        
+        # Extract document type and metadata
+        doc_type = "transcript" if document_info and document_info.get("is_meeting_transcript") else "document"
+        
+        # Create prompt
+        prompt = f"""
+        You are an AI assistant helping with document analysis and questions.
+        
+        DOCUMENT SUMMARY:
+        {summary_text}
+        
+        DOCUMENT TYPE: {doc_type}
+        
+        DOCUMENT EXCERPT (beginning of document):
+        {truncated_doc}
+        
+        USER QUESTION: {question}
+        
+        Please answer the question based on the document information provided.
+        Focus on being helpful, concise, and accurate.
+        If the information is not available in the context, say so.
+        """
+        
+        # Get response from LLM
+        try:
+            response = asyncio.run(llm_client.generate_completion_async(prompt))
+            
+            # Add assistant response to chat history
+            st.session_state.chat_history.append({"role": "assistant", "content": response})
+            
+            # Force a rerun to update the display
+            st.rerun()
+        except Exception as e:
+            # Handle error gracefully
+            error_message = f"Sorry, I encountered an error while processing your question: {str(e)}"
+            st.session_state.chat_history.append({"role": "assistant", "content": error_message})
+            st.rerun()

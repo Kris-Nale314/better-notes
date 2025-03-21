@@ -1,26 +1,27 @@
 """
-Document analyzer for quick initial assessment and metadata extraction.
+Streamlined document analyzer for quick initial assessment and metadata extraction.
 """
 
 import re
 import json
 import logging
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# Common business domains and topics for categorization
+# Common business domains for categorization (simplified)
 BUSINESS_DOMAINS = [
-    "AI", "Data", "Data Management", "AI Governance", "Platforms", "AI Adoption", 
-    "People", "Skills", "Strategy", "Technology", "Innovation", "Cloud", 
-    "Analytics", "Machine Learning", "Digital Transformation", "Security",
-    "Infrastructure", "DevOps", "Agile", "Product Management", "Customer Experience",
-    "Finance", "Marketing", "Sales", "HR", "Legal", "Operations", "Supply Chain",
-    "Risk Management", "Compliance", "Enterprise Architecture"
+    "AI", "Data", "Cloud", "Security", "DevOps", "Analytics", 
+    "Digital Transformation", "Strategy", "Product", "Marketing", 
+    "Sales", "HR", "Operations", "Finance", "Legal"
 ]
 
 class DocumentAnalyzer:
-    """Analyzes documents to extract key information and metadata."""
+    """
+    Analyzes documents to extract key information and metadata.
+    This streamlined version focuses on the most valuable metadata extraction
+    while reducing complexity.
+    """
     
     def __init__(self, llm_client):
         """
@@ -41,19 +42,16 @@ class DocumentAnalyzer:
         Returns:
             Dictionary of basic stats
         """
-        # Character count (with and without spaces)
+        # Character count
         chars_with_spaces = len(text)
-        chars_without_spaces = len(text.replace(" ", "").replace("\n", "").replace("\t", ""))
+        chars_without_spaces = len(re.sub(r'\s', '', text))
         
-        # Word count
+        # Word count - simplified regex
         words = re.findall(r'\b\w+\b', text)
         word_count = len(words)
         
         # Sentence count (approximate)
-        sentence_patterns = [r'[.!?]+\s+[A-Z]', r'[.!?]+$']
-        sentence_count = 0
-        for pattern in sentence_patterns:
-            sentence_count += len(re.findall(pattern, text))
+        sentence_count = len(re.findall(r'[.!?]+\s+[A-Z]|[.!?]+$', text))
         
         # Paragraph count
         paragraphs = [p for p in text.split('\n\n') if p.strip()]
@@ -62,25 +60,19 @@ class DocumentAnalyzer:
         # Estimate token count (rough approximation)
         estimated_tokens = len(text) // 4
         
-        # Get average word length
-        if word_count > 0:
-            avg_word_length = sum(len(word) for word in words) / word_count
-        else:
-            avg_word_length = 0
-            
         return {
             "char_count": chars_with_spaces,
             "char_count_no_spaces": chars_without_spaces,
             "word_count": word_count,
             "sentence_count": sentence_count,
             "paragraph_count": paragraph_count,
-            "estimated_tokens": estimated_tokens,
-            "avg_word_length": round(avg_word_length, 1)
+            "estimated_tokens": estimated_tokens
         }
     
     async def analyze_preview(self, text: str, preview_length: int = 2000) -> Dict[str, Any]:
         """
         Analyze the beginning of a document to extract context and metadata.
+        Streamlined version with simpler error handling.
         
         Args:
             text: Document text
@@ -100,8 +92,8 @@ class DocumentAnalyzer:
         - summary: A 1-2 sentence summary of what this document appears to be about
         - client_name: The name of the client or company being discussed (if mentioned)
         - meeting_purpose: The apparent purpose of this meeting/document (if it's a transcript or meeting notes)
-        - key_topics: A list of 3-7 main topics that appear to be discussed
-        - domain_categories: A list of 2-4 business domains this document relates to (from this list: {", ".join(BUSINESS_DOMAINS)})
+        - key_topics: A list of 3-5 main topics that appear to be discussed
+        - domain_categories: A list of 2-3 business domains this document relates to (from this list: {", ".join(BUSINESS_DOMAINS)})
         - participants: Any people mentioned as participants (if it's a meeting)
         
         If any field cannot be determined, use null or an empty list as appropriate.
@@ -116,104 +108,109 @@ class DocumentAnalyzer:
             
             # Parse JSON response
             try:
-                result = json.loads(response)
-                return {
-                    "preview_analysis": result,
-                    "is_meeting_transcript": self._is_likely_transcript(preview, result),
-                    "preview_length": len(preview)
-                }
+                analysis_result = json.loads(response)
+                logger.info("Successfully parsed document preview analysis")
             except json.JSONDecodeError:
-                # Fallback if JSON parsing fails
-                logger.warning("Failed to parse preview analysis JSON. Using fallback extraction.")
-                return self._fallback_preview_extraction(response, preview)
+                # Simple fallback if JSON parsing fails
+                analysis_result = self._extract_basic_analysis(response)
+                logger.warning("JSON parsing failed, using basic text extraction")
+            
+            # Add is_transcript flag
+            is_transcript = self._is_likely_transcript(preview, analysis_result)
+            
+            return {
+                "preview_analysis": analysis_result,
+                "is_meeting_transcript": is_transcript,
+                "preview_length": len(preview),
+                "basic_stats": self.get_basic_stats(text)
+            }
+            
         except Exception as e:
             logger.error(f"Error in document preview analysis: {e}")
-            # Provide a basic fallback
+            # Minimal fallback
             return {
                 "preview_analysis": {
                     "summary": "Document analysis could not be completed",
-                    "client_name": None,
-                    "meeting_purpose": None,
                     "key_topics": [],
-                    "domain_categories": [],
-                    "participants": []
+                    "domain_categories": []
                 },
                 "is_meeting_transcript": self._is_likely_transcript(preview),
-                "preview_length": len(preview)
+                "preview_length": len(preview),
+                "basic_stats": self.get_basic_stats(text)
             }
     
-    def _fallback_preview_extraction(self, text_response: str, preview: str) -> Dict[str, Any]:
+    def _extract_basic_analysis(self, text_response: str) -> Dict[str, Any]:
         """
-        Extract preview metadata when JSON parsing fails.
+        Extract basic preview metadata when JSON parsing fails.
+        Simplified version with more reliable text extraction.
         
         Args:
             text_response: Text response from LLM
-            preview: Document preview text
             
         Returns:
             Dictionary with extracted preview analysis
         """
+        # Default result
+        result = {
+            "summary": "",
+            "client_name": None,
+            "meeting_purpose": None,
+            "key_topics": [],
+            "domain_categories": [],
+            "participants": []
+        }
+        
         # Extract summary
-        summary = ""
-        if "summary:" in text_response.lower():
-            summary_section = text_response.lower().split("summary:")[1].split("\n")[0]
-            summary = summary_section.strip()
+        summary_match = re.search(r'summary:?\s*(.+?)(?:\n|$)', text_response, re.IGNORECASE)
+        if summary_match:
+            result["summary"] = summary_match.group(1).strip()
         
         # Extract client name
-        client_name = None
-        if "client_name:" in text_response.lower():
-            client_section = text_response.lower().split("client_name:")[1].split("\n")[0]
-            client_name = client_section.strip()
-            if client_name.lower() in ["null", "none", "n/a"]:
-                client_name = None
+        client_match = re.search(r'client_?name:?\s*(.+?)(?:\n|$)', text_response, re.IGNORECASE)
+        if client_match:
+            client = client_match.group(1).strip()
+            if client.lower() not in ["null", "none", "n/a"]:
+                result["client_name"] = client
         
         # Extract meeting purpose
-        meeting_purpose = None
-        if "meeting_purpose:" in text_response.lower():
-            purpose_section = text_response.lower().split("meeting_purpose:")[1].split("\n")[0]
-            meeting_purpose = purpose_section.strip()
-            if meeting_purpose.lower() in ["null", "none", "n/a"]:
-                meeting_purpose = None
+        purpose_match = re.search(r'meeting_?purpose:?\s*(.+?)(?:\n|$)', text_response, re.IGNORECASE)
+        if purpose_match:
+            purpose = purpose_match.group(1).strip()
+            if purpose.lower() not in ["null", "none", "n/a"]:
+                result["meeting_purpose"] = purpose
         
         # Extract key topics
-        key_topics = []
-        if "key_topics:" in text_response.lower():
-            topics_text = text_response.lower().split("key_topics:")[1].split("domain_categories:")[0]
-            topic_matches = re.findall(r'[-•*]?\s*([^,\n]+)', topics_text)
-            key_topics = [t.strip() for t in topic_matches if t.strip()]
+        topics_section = re.search(r'key_?topics:?(.*?)(?:domain|participants|$)', text_response, re.IGNORECASE | re.DOTALL)
+        if topics_section:
+            topic_text = topics_section.group(1)
+            # Handle both list formats and comma-separated
+            topics = re.findall(r'[-•*]\s*([^,\n]+)|"([^"]+)"|\'([^\']+)\'|([^,\n]+)', topic_text)
+            # Flatten and clean the topics
+            result["key_topics"] = [next(t for t in topic if t) for topic in topics if any(t)]
         
         # Extract domain categories
-        domain_categories = []
-        if "domain_categories:" in text_response.lower():
-            domains_text = text_response.lower().split("domain_categories:")[1].split("participants:")[0]
-            domain_matches = re.findall(r'[-•*]?\s*([^,\n]+)', domains_text)
-            domain_categories = [d.strip() for d in domain_matches if d.strip()]
-            # Filter to valid domains
-            domain_categories = [d for d in domain_categories if any(domain.lower() in d.lower() for domain in BUSINESS_DOMAINS)]
+        domains_section = re.search(r'domain_?categories:?(.*?)(?:participants|$)', text_response, re.IGNORECASE | re.DOTALL)
+        if domains_section:
+            domain_text = domains_section.group(1)
+            domains = re.findall(r'[-•*]\s*([^,\n]+)|"([^"]+)"|\'([^\']+)\'|([^,\n]+)', domain_text)
+            # Flatten, clean, and filter the domains
+            domain_candidates = [next(d for d in domain if d).strip() for domain in domains if any(d)]
+            result["domain_categories"] = [d for d in domain_candidates 
+                                        if any(domain.lower() in d.lower() for domain in BUSINESS_DOMAINS)]
         
         # Extract participants
-        participants = []
-        if "participants:" in text_response.lower():
-            participants_text = text_response.lower().split("participants:")[1]
-            participant_matches = re.findall(r'[-•*]?\s*([^,\n]+)', participants_text)
-            participants = [p.strip() for p in participant_matches if p.strip()]
+        participants_section = re.search(r'participants:?(.*?)(?:$)', text_response, re.IGNORECASE | re.DOTALL)
+        if participants_section:
+            participants_text = participants_section.group(1)
+            participants = re.findall(r'[-•*]\s*([^,\n]+)|"([^"]+)"|\'([^\']+)\'|([^,\n]+)', participants_text)
+            result["participants"] = [next(p for p in participant if p).strip() for participant in participants if any(p)]
         
-        return {
-            "preview_analysis": {
-                "summary": summary,
-                "client_name": client_name,
-                "meeting_purpose": meeting_purpose,
-                "key_topics": key_topics,
-                "domain_categories": domain_categories,
-                "participants": participants
-            },
-            "is_meeting_transcript": self._is_likely_transcript(preview),
-            "preview_length": len(preview)
-        }
+        return result
     
     def _is_likely_transcript(self, text: str, analysis_result: Optional[Dict[str, Any]] = None) -> bool:
         """
         Determine if text is likely a meeting transcript.
+        Simplified implementation focusing on the most reliable indicators.
         
         Args:
             text: Text to analyze
@@ -223,25 +220,35 @@ class DocumentAnalyzer:
             Boolean indicating if text is likely a transcript
         """
         # Check for transcript patterns
-        transcript_patterns = [
-            # Time stamps
+        transcript_indicators = [
+            # Speaker indicators (most reliable)
+            r'\n\s*[A-Z][a-z]+:', 
+            r'\n\s*[A-Z][a-z]+ [A-Z][a-z]+:',
+            
+            # Time markers
             r'\d{1,2}:\d{2}(:\d{2})?\s*[AP]M',
-            # Speaker indicators
-            r'^[A-Z][a-z]+:',
-            r'^[A-Z][a-z]+ [A-Z][a-z]+:',
+            
             # Meeting markers
             r'meeting (started|began|commenced)',
-            r'call (started|began|commenced)',
-            # Participant lists
-            r'(attendees|participants|present):'
+            r'transcript',
+            r'(attendees|participants):'
         ]
         
-        # Check for patterns
-        for pattern in transcript_patterns:
-            if re.search(pattern, text, re.MULTILINE):
+        # Count matches for indicators
+        indicator_count = 0
+        for pattern in transcript_indicators:
+            matches = re.findall(pattern, text)
+            indicator_count += len(matches)
+            
+            # Short-circuit if we have strong evidence
+            if len(matches) >= 3:
                 return True
         
-        # If we have analysis, use it to help determine
+        # If we have several matches, likely a transcript
+        if indicator_count >= 5:
+            return True
+        
+        # Use analysis result if available
         if analysis_result:
             # If there are participants and a meeting purpose, likely a transcript
             if (analysis_result.get('participants') and 
@@ -249,7 +256,7 @@ class DocumentAnalyzer:
                 len(analysis_result.get('participants', [])) > 1):
                 return True
             
-            # If the summary mentions "meeting", "call", "discussion", likely a transcript
+            # If the summary mentions meeting terms, likely a transcript
             summary = analysis_result.get('summary', '').lower()
             transcript_keywords = ['meeting', 'call', 'discussion', 'conversation', 'transcript']
             if any(keyword in summary for keyword in transcript_keywords):

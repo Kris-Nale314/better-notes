@@ -10,16 +10,23 @@ from pathlib import Path
 import tempfile
 import json
 import datetime
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
+# Import the orchestrator
 from orchestrator import OrchestratorFactory
 
+# Import lean components
 from lean.options import ProcessingOptions
-from orchestrator import Orchestrator
 from lean.async_openai_adapter import AsyncOpenAIAdapter
+
+# Import UI enhancements
 from ui_utils.ui_enhance import (
     apply_custom_css, 
     render_agent_card, 
     enhance_result_display,
-    format_log_entries
+    format_log_entries,
+    display_chat_interface
 )
 
 # Configure page
@@ -31,6 +38,21 @@ st.set_page_config(
 
 # Custom CSS for styling
 apply_custom_css()
+
+# Set up output directory structure
+OUTPUT_DIR = Path("outputs")
+OUTPUT_DIR.mkdir(exist_ok=True)
+
+def ensure_output_dirs():
+    """Ensure all output directories exist"""
+    for analysis_type in ["issues", "actions", "insights"]:
+        dir_path = OUTPUT_DIR / analysis_type
+        dir_path.mkdir(exist_ok=True)
+    
+    # Directory for agent intermediates
+    (OUTPUT_DIR / "intermediates").mkdir(exist_ok=True)
+
+ensure_output_dirs()
 
 # --- Sidebar Configuration ---
 st.sidebar.header("Analysis Settings")
@@ -171,22 +193,50 @@ def save_output_to_file(content: str, analysis_type: str) -> str:
     Returns:
         File path where content was saved
     """
-    # Create outputs directory if it doesn't exist
-    outputs_dir = "outputs"
-    os.makedirs(outputs_dir, exist_ok=True)
-    
     # Generate timestamp
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    # Create filename
+    # Create filename with analysis-specific directory
+    output_dir = OUTPUT_DIR / analysis_type
+    output_dir.mkdir(exist_ok=True)
+    
     filename = f"{analysis_type}_{timestamp}.md"
-    filepath = os.path.join(outputs_dir, filename)
+    filepath = output_dir / filename
     
     # Write content to file
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(content)
     
-    return filepath
+    return str(filepath)
+
+# Function to save agent intermediate outputs
+def save_intermediate_output(content: str, analysis_type: str, agent_type: str) -> str:
+    """
+    Save intermediate agent output for debugging and inspection.
+    
+    Args:
+        content: Content to save
+        analysis_type: Type of analysis (issues, actions, etc.)
+        agent_type: Type of agent (extractor, aggregator, etc.)
+        
+    Returns:
+        File path where content was saved
+    """
+    # Generate timestamp
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Create filename with intermediates directory
+    output_dir = OUTPUT_DIR / "intermediates"
+    output_dir.mkdir(exist_ok=True)
+    
+    filename = f"{analysis_type}_{agent_type}_{timestamp}.json"
+    filepath = output_dir / filename
+    
+    # Write content to file
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(content)
+    
+    return str(filepath)
 
 # Display configuration for selected analysis type
 if st.session_state.selected_analysis:
@@ -282,18 +332,51 @@ if st.session_state.selected_analysis:
             "evaluator": "waiting",
             "formatter": "waiting"
         }
+    if "analysis_result" not in st.session_state:
+        st.session_state.analysis_result = None
+    if "document_info" not in st.session_state:
+        st.session_state.document_info = None
     
-    # Function to process document
     # Function to process document
     def process_document():
         """Process the document with agent crews and handle UI updates."""
+        # Store original settings in session state if not already there
+        if "original_settings" not in st.session_state:
+            st.session_state.original_settings = {
+                "detail_level": detail_level,
+                "temperature": temperature,
+                "min_chunks": min_chunks,
+                "user_instructions": user_instructions
+            }
+        
+        # Check if we're doing a reanalysis and apply settings
+        current_detail = detail_level
+        current_temp = temperature
+        current_chunks = min_chunks
+        current_instructions = user_instructions
+        
+        if "reanalysis_settings" in st.session_state:
+            # Get settings from reanalysis
+            reanalysis = st.session_state.reanalysis_settings
+            current_detail = reanalysis["detail_level"]
+            current_temp = reanalysis["temperature"]
+            current_chunks = reanalysis["min_chunks"]
+            current_instructions = reanalysis["user_instructions"]
+            
+            # Clear reanalysis settings for next run
+            del st.session_state.reanalysis_settings
+            
+            # Log the reanalysis
+            timestamp = time.strftime("%H:%M:%S")
+            log_entry = f"[{timestamp}] Reanalyzing with updated settings: Detail={current_detail}, Temp={current_temp}"
+            st.session_state.agent_logs.append(log_entry)
+        
         # Get API key
         api_key = os.environ.get("OPENAI_API_KEY", "")
         if not api_key:
             st.error("OpenAI API key not found! Please set the OPENAI_API_KEY environment variable.")
             return
-        # In the process_document function in 02_Multi_Agent.py, update the orchestrator creation:
-        OrchestratorFactory()
+    
         
         # Set up progress tracking
         progress_container = st.container()
@@ -338,7 +421,7 @@ if st.session_state.selected_analysis:
                 log_box.markdown(log_html, unsafe_allow_html=True)
             
             # Update agent statuses based on progress messages
-            if "Extraction" in message:
+            if "Extraction" in message or "extraction" in message.lower():
                 update_agent_status("extractor", "working", agent_status_components)
             elif "Aggregating" in message or "aggregation" in message.lower():
                 update_agent_status("extractor", "complete", agent_status_components)
@@ -359,6 +442,9 @@ if st.session_state.selected_analysis:
                 temperature=temperature
             )
             
+            # Store LLM client in session state for chat interface
+            st.session_state.llm_client = llm_client
+            
             # Map detail level to a standardized value
             detail_map = {
                 "Essential": "essential",
@@ -366,7 +452,7 @@ if st.session_state.selected_analysis:
                 "Comprehensive": "comprehensive"
             }
             
-            # Create orchestrator using the factory instead of direct initialization
+            # Create orchestrator using the factory
             orchestrator = OrchestratorFactory.create_orchestrator(
                 model=selected_model,
                 temperature=temperature,
@@ -376,11 +462,13 @@ if st.session_state.selected_analysis:
             )
             
             # Update RPM setting in all agents
-            for agent_type in ["extractor", "aggregator", "evaluator", "formatter"]:
-                if hasattr(orchestrator.issues_crew, f"{agent_type}_agent"):
-                    agent = getattr(orchestrator.issues_crew, f"{agent_type}_agent")
-                    if hasattr(agent, "agent") and hasattr(agent.agent, "max_rpm"):
-                        agent.agent.max_rpm = max_rpm
+            orchestrator.update_max_rpm(max_rpm)
+            
+            # Analyze document for chat interface context
+            update_progress(0.1, "Analyzing document...")
+            analysis_result = asyncio.run(orchestrator.analyzer.analyze_preview(document_text))
+            st.session_state.analysis_result = analysis_result
+            st.session_state.document_info = analysis_result
             
             # Process options
             options = {
@@ -405,6 +493,19 @@ if st.session_state.selected_analysis:
             st.session_state.processing_complete = True
             st.session_state.processing_time = time.time() - start_time
             
+            # Save intermediate outputs if available
+            if show_agent_details and hasattr(orchestrator.issues_crew, "crew"):
+                for agent_type in ["extractor", "aggregator", "evaluator", "formatter"]:
+                    try:
+                        # Try to get output from tasks
+                        task_outputs = orchestrator.issues_crew.crew.outputs
+                        for task in task_outputs:
+                            if agent_type in task.name.lower():
+                                output_content = json.dumps(task.output, indent=2)
+                                save_intermediate_output(output_content, selected_type, agent_type)
+                    except:
+                        pass  # Silently continue if task outputs not available
+            
             # Clear progress indicators
             progress_container.empty()
             
@@ -415,53 +516,8 @@ if st.session_state.selected_analysis:
             progress_container.empty()
             st.error(f"Error processing document: {str(e)}")
             st.exception(e)
-                
-
-    
-    # Helper function to render agent cards
-    def render_agent_card(agent_type, status, component):
-        agent_info = {
-            "extractor": {
-                "title": "Extractor Agent", 
-                "role": f"Identifying {selected_type}"
-            },
-            "aggregator": {
-                "title": "Aggregator Agent", 
-                "role": "Combining and deduplicating"
-            },
-            "evaluator": {
-                "title": "Evaluator Agent", 
-                "role": "Assessing importance and relevance"
-            },
-            "formatter": {
-                "title": "Formatter Agent", 
-                "role": "Creating structured report"
-            }
-        }
-        
-        status_icons = {
-            "waiting": "⏳",
-            "working": "🔄",
-            "complete": "✅"
-        }
-        
-        status_classes = {
-            "waiting": "agent-card",
-            "working": "agent-card agent-working",
-            "complete": "agent-card agent-complete"
-        }
-        
-        component.markdown(f"""
-        <div class="{status_classes[status]}">
-            <h4>{status_icons[status]} {agent_info[agent_type]['title']}</h4>
-            <p>{agent_info[agent_type]['role']}</p>
-            <p><small>Status: {status.capitalize()}</small></p>
-        </div>
-        """, unsafe_allow_html=True)
     
     # Helper function to update agent status
-    # Helper function to update agent status
-    # And update the update_agent_status function to match our ui_enhance.py:
     def update_agent_status(agent_type, new_status, components):
         st.session_state.agent_statuses[agent_type] = new_status
         render_agent_card(agent_type, new_status, components[agent_type])
@@ -499,8 +555,8 @@ if st.session_state.selected_analysis:
         st.success(f"Analysis completed in {st.session_state.processing_time:.2f} seconds and saved to {saved_filepath}")
         
         # Create tabs for different views of the results
-        result_tabs = st.tabs(["Report", "Agent Interactions", "Technical Details"])
-        
+        result_tabs = st.tabs(["Report", "Chat with Document", "Adjust Analysis", "Agent Interactions", "Technical Details"])
+                
         with result_tabs[0]:
             st.subheader(f"{analysis_types[selected_type]['title']} Results")
             
@@ -539,6 +595,117 @@ if st.session_state.selected_analysis:
             )
         
         with result_tabs[1]:
+            st.subheader(f"Chat about this {analysis_types[selected_type]['title']} Report")
+            
+            # Use the chat interface from ui_utils
+            display_chat_interface(
+                llm_client=st.session_state.llm_client,
+                document_text=document_text,
+                summary_text=result_text,
+                document_info=st.session_state.document_info
+            )
+        
+        with result_tabs[2]:
+            st.subheader(f"Adjust Analysis Settings")
+            
+            # Create a form for reanalysis settings
+            with st.form("reanalysis_form"):
+                st.write("Adjust settings and provide new instructions to reanalyze the document")
+                
+                # Allow adjusting key parameters
+                new_detail_level = st.select_slider(
+                    "Detail Level",
+                    options=["Essential", "Standard", "Comprehensive"],
+                    value=detail_level,
+                    help="Controls the depth of the analysis"
+                )
+                
+                new_temperature = st.slider(
+                    "Temperature", 
+                    min_value=0.0, 
+                    max_value=1.0, 
+                    value=temperature,
+                    step=0.1,
+                    help="Higher values = more creative, lower = more consistent"
+                )
+                
+                new_min_chunks = st.slider(
+                    "Minimum Chunks",
+                    min_value=1,
+                    max_value=10,
+                    value=min_chunks,
+                    help="Minimum number of sections to divide document into"
+                )
+                
+                # Expanded instructions area
+                new_instructions = st.text_area(
+                    "Analysis Instructions",
+                    value=user_instructions,
+                    height=150,
+                    help="Based on the chat, what specific aspects would you like the analysis to focus on?"
+                )
+                
+                # Add specific focus options based on analysis type
+                if selected_type == "issues":
+                    focus_options = st.multiselect(
+                        "Focus Areas",
+                        options=["Technical Issues", "Budget Concerns", "Timeline Risks", 
+                                "Resource Constraints", "Quality Problems", "Process Issues"],
+                        default=[],
+                        help="Select specific areas to emphasize in the analysis"
+                    )
+                elif selected_type == "actions":
+                    focus_options = st.multiselect(
+                        "Focus Areas",
+                        options=["Immediate Actions", "Ownership Assignment", "Deadlines", 
+                                "Decision Points", "Follow-up Items", "Meeting Outcomes"],
+                        default=[],
+                        help="Select specific areas to emphasize in the analysis"
+                    )
+                else:  # insights
+                    focus_options = st.multiselect(
+                        "Focus Areas",
+                        options=["Key Themes", "Participant Dynamics", "Meeting Outcomes", 
+                                "Decision Process", "Notable Quotes", "Context Analysis"],
+                        default=[],
+                        help="Select specific areas to emphasize in the analysis"
+                    )
+                    
+                # Add focus areas to instructions if selected
+                if focus_options:
+                    if new_instructions:
+                        new_instructions += "\n\nFocus areas: " + ", ".join(focus_options)
+                    else:
+                        new_instructions = "Focus areas: " + ", ".join(focus_options)
+                
+                # Reanalysis button
+                reanalyze_submitted = st.form_submit_button("Reanalyze Document", type="primary")
+            
+            if reanalyze_submitted:
+                # Store new settings in session state
+                st.session_state.reanalysis_settings = {
+                    "detail_level": new_detail_level,
+                    "temperature": new_temperature,
+                    "min_chunks": new_min_chunks,
+                    "user_instructions": new_instructions
+                }
+                
+                # Reset processing flags
+                st.session_state.processing_complete = False
+                st.session_state.agent_result = None
+                st.session_state.agent_statuses = {
+                    "extractor": "waiting",
+                    "aggregator": "waiting",
+                    "evaluator": "waiting",
+                    "formatter": "waiting"
+                }
+                
+                # Show processing message
+                st.info("Starting reanalysis with updated settings...")
+                st.rerun()   # Rerun to trigger processing with new settings     
+            
+        
+        with result_tabs[3]:
             st.subheader("Agent Interaction Log")
             if st.session_state.agent_logs:
                 # Use the log formatter from ui_utils
@@ -547,7 +714,7 @@ if st.session_state.selected_analysis:
             else:
                 st.info("Agent interaction logs are not available. Enable 'Show Agent Interactions' in settings to see detailed logs in your next analysis.")
         
-        with result_tabs[2]:
+        with result_tabs[4]:
             st.subheader("Technical Details")
             tech_details = {
                 "model_used": selected_model,

@@ -1,6 +1,6 @@
-# lean/booster.py
 """
-Booster module that enhances performance and optimizes processing.
+Improved Booster module that enhances performance and optimizes processing.
+This version combines the duplicate implementations and improves caching.
 """
 
 import asyncio
@@ -19,7 +19,15 @@ logger = logging.getLogger(__name__)
 T = TypeVar('T')
 
 class Booster:
-    """Enhances performance of document processing with caching and parallel execution."""
+    """
+    Enhances performance of document processing with caching and parallel execution.
+    
+    This improved version:
+    1. Combines both process_in_parallel implementations into a single method
+    2. Properly handles both async and sync functions
+    3. Improves error handling for better resilience
+    4. Provides simpler caching implementation
+    """
     
     def __init__(self, cache_dir: str = ".cache", max_workers: int = 4, enable_caching: bool = True):
         """
@@ -37,6 +45,7 @@ class Booster:
         # Create cache directory if it doesn't exist and caching is enabled
         if self.enable_caching:
             os.makedirs(self.cache_dir, exist_ok=True)
+            logger.info(f"Cache enabled in directory: {self.cache_dir}")
     
     async def process_in_parallel(self, 
                                 items: List[Any], 
@@ -44,6 +53,7 @@ class Booster:
                                 max_concurrency: Optional[int] = None) -> List[T]:
         """
         Process items in parallel with controlled concurrency.
+        Works with both synchronous and asynchronous processing functions.
         
         Args:
             items: List of items to process
@@ -58,6 +68,7 @@ class Booster:
         
         # Use provided concurrency limit or fall back to max_workers
         concurrency_limit = max_concurrency or self.max_workers
+        logger.info(f"Processing {len(items)} items with concurrency limit of {concurrency_limit}")
         
         # Create a semaphore to limit concurrency
         semaphore = asyncio.Semaphore(concurrency_limit)
@@ -76,6 +87,7 @@ class Booster:
                 try:
                     # Check if the function is already async
                     if asyncio.iscoroutinefunction(process_func):
+                        # Process the item with the async function
                         result = await process_func(item)
                     else:
                         # Run sync function in executor
@@ -89,26 +101,36 @@ class Booster:
                     return result
                 except Exception as e:
                     logger.error(f"Error processing item {index}: {e}")
-                    raise
+                    # Return error information instead of raising
+                    return {
+                        "error": str(e),
+                        "item_index": index
+                    }
         
         # Create tasks for all items
         tasks = [worker(item, i) for i, item in enumerate(items)]
         
         # Execute all tasks and wait for completion
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Handle exceptions
-        processed_results = []
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                logger.error(f"Task {i} raised an exception: {result}")
-                raise result  # Re-raise to caller
-            processed_results.append(result)
-        
-        return processed_results
+        try:
+            results = await asyncio.gather(*tasks)
+            logger.info(f"Successfully processed {len(results)} items in parallel")
+            return results
+        except Exception as e:
+            logger.error(f"Error in gather operation: {e}")
+            # Return partial results if possible
+            return []
     
     def _get_cache_key(self, item: Any, func: Callable) -> str:
-        """Generate a unique cache key for an item and function."""
+        """
+        Generate a unique cache key for an item and function.
+        
+        Args:
+            item: The item being processed
+            func: The processing function
+            
+        Returns:
+            A unique cache key string
+        """
         # Get function name or qualified name if available
         func_name = getattr(func, "__qualname__", func.__name__)
         
@@ -133,7 +155,16 @@ class Booster:
         return key
     
     def _get_from_cache(self, item: Any, func: Callable) -> Optional[Any]:
-        """Get a result from cache if available."""
+        """
+        Get a result from cache if available.
+        
+        Args:
+            item: The item being processed
+            func: The processing function
+            
+        Returns:
+            The cached result if available, otherwise None
+        """
         if not self.enable_caching:
             return None
             
@@ -152,7 +183,14 @@ class Booster:
         return None
     
     def _save_to_cache(self, item: Any, func: Callable, result: Any) -> None:
-        """Save a result to cache."""
+        """
+        Save a result to cache.
+        
+        Args:
+            item: The item being processed
+            func: The processing function
+            result: The result to cache
+        """
         if not self.enable_caching:
             return
             
@@ -186,93 +224,34 @@ class Booster:
             Result of the function, or raises exception if max_retries reached
         """
         retries = 0
-        while retries < max_retries:
+        last_exception = None
+        
+        while retries <= max_retries:  # Changed from < to <= to include the initial try
             try:
                 if asyncio.iscoroutinefunction(func):
                     result = await func(*args, **kwargs)
                 else:
                     loop = asyncio.get_event_loop()
-                    result = await loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
+                    result = await loop.run_in_executor(
+                        None, 
+                        functools.partial(func, *args, **kwargs)
+                    )
                 return result
             except Exception as e:
+                last_exception = e
                 retries += 1
-                if retries >= max_retries:
-                    logger.error(f"Max retries exceeded for function {func.__name__}: {e}")
-                    raise
                 
-                delay = base_delay * (2 ** retries)
+                if retries > max_retries:
+                    logger.error(f"Max retries exceeded for function {func.__name__}: {e}")
+                    break
+                
+                delay = base_delay * (2 ** (retries - 1))  # Start with base_delay
                 logger.warning(f"Error in {func.__name__}: {e}. Retrying in {delay:.2f} seconds...")
                 await asyncio.sleep(delay)
-
-    # Updated process_in_parallel method for the Booster class
-
-    async def process_in_parallel(self, 
-                                items: List[Any], 
-                                process_func, 
-                                max_concurrency: Optional[int] = None) -> List[Any]:
-        """
-        Process items in parallel with controlled concurrency.
         
-        Args:
-            items: List of items to process
-            process_func: Function to apply to each item (must be awaitable)
-            max_concurrency: Maximum concurrent tasks (defaults to self.max_workers)
-            
-        Returns:
-            List of processed results
-        """
-        import asyncio
-        import logging
-        logger = logging.getLogger(__name__)
+        # If we've exhausted retries, raise the last exception
+        if last_exception:
+            raise last_exception
         
-        if not items:
-            return []
-        
-        # Use provided concurrency limit or fall back to max_workers
-        concurrency_limit = max_concurrency or self.max_workers
-        
-        # Create a semaphore to limit concurrency
-        semaphore = asyncio.Semaphore(concurrency_limit)
-        
-        # Define worker function that respects the semaphore
-        async def worker(item, index):
-            # Try to get from cache first if enabled
-            if self.enable_caching:
-                cached_result = self._get_from_cache(item, process_func)
-                if cached_result is not None:
-                    logger.debug(f"Cache hit for item {index}")
-                    return cached_result
-            
-            # Not in cache, acquire semaphore and process
-            async with semaphore:
-                try:
-                    # IMPORTANT: Always await the process_func
-                    # This assumes process_func is an awaitable function
-                    result = await process_func(item)
-                    
-                    # Cache result if enabled
-                    if self.enable_caching:
-                        # Only cache actual results, not coroutines
-                        self._save_to_cache(item, process_func, result)
-                    
-                    return result
-                except Exception as e:
-                    logger.error(f"Error processing item {index}: {e}")
-                    # Return error information instead of raising
-                    return {
-                        "error": str(e),
-                        "item_index": index
-                    }
-        
-        # Create tasks for all items
-        tasks = [worker(item, i) for i, item in enumerate(items)]
-        
-        # Execute all tasks and wait for completion
-        try:
-            results = await asyncio.gather(*tasks)
-        except Exception as e:
-            logger.error(f"Error in gather operation: {e}")
-            # Return partial results if possible
-            results = []
-        
-        return results
+        # This should never happen, but just in case
+        raise RuntimeError(f"Failed to execute {func.__name__} after {max_retries} retries")
