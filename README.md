@@ -1,132 +1,155 @@
-# Better Notes
+<p align="center">
+  <img src="https://via.placeholder.com/250x150?text=Better+Notes" alt="Better Notes Logo" width="250"/>
+</p>
 
-An AI-powered document analysis and note-taking assistant that transforms documents and transcripts into organized, insightful notes with specialized analysis.
+<h1 align="center">Better Notes</h1>
+<p align="center"><strong>AI-powered document analysis assistant built with agent-based architecture</strong></p>
 
-## Features
+<p align="center">
+  <a href="#"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
+  <a href="#"><img src="https://img.shields.io/badge/python-3.8%2B-blue" alt="Python"></a>
+  <a href="#"><img src="https://img.shields.io/badge/status-beta-orange" alt="Development Status"></a>
+</p>
 
-- **Smart Summarization**: Convert long documents into clear, organized notes
-- **Specialized Analysis**:
-  - Issue Identification: Find problems, challenges, and concerns
-  - Opportunity Identification: Discover potential improvements and opportunities
-  - Action Item Extraction: Extract tasks, assignments, and follow-ups
-- **Customizable Processing**: Control detail level, model selection, and more
-- **Simple Interface**: Upload documents and get enhanced notes with minimal setup
+## Why Agent-Based Analysis Matters in Document Processing
 
-## Setup
+Traditional document processors treat analysis as a single-pass operation, leading to:
 
-### Prerequisites
+- **Depth limitations** when complex topics need specialized attention
+- **Context isolation** when insights are processed independently
+- **Quality ceilings** when one model tackles multi-faceted problems
 
-- Python 3.8+ 
-- An OpenAI API key
+Better Notes addresses these issues through multi-agent teams:
 
-### Installation
+- **Specialized agents** focus on their domain of expertise
+- **Collaborative processing** enhances output quality
+- **Parallel execution** scales to very large documents
+- **Iterative refinement** responds to user feedback
 
-1. Clone the repository
-   ```bash
-   git clone https://github.com/yourusername/better-notes.git
-   cd better-notes
-   ```
+## Key Capabilities
 
-2. Create a virtual environment
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   ```
+<table>
+<tr>
+<td width="50%">
 
-3. Install the required packages
-   ```bash
-   pip install -r requirements.txt
-   ```
+### Smart Document Analysis
+- Structure-aware document processing
+- Meeting transcript specialization
+- Parallel chunk processing
+- Hierarchical synthesis
 
-4. Set up your environment variables
-   ```bash
-   cp .env.example .env
-   ```
-   
-   Edit the `.env` file and add your OpenAI API key:
-   ```
-   OPENAI_API_KEY=your_openai_api_key_here
-   ```
+</td>
+<td width="50%">
 
-5. Verify your setup
-   ```bash
-   python test_adapter.py
-   ```
-   This will test your connection to the OpenAI API to ensure everything is working correctly.
+### Specialized Agent Teams
+- Issues identification crew
+- Action items extraction crew
+- Opportunities discovery crew
+- Insight synthesis team
 
-## Usage
+</td>
+</tr>
+<tr>
+<td colspan="2" align="center">
+<img src="https://via.placeholder.com/800x400?text=Better+Notes+Architecture" alt="Better Notes Architecture" width="80%"/>
+</td>
+</tr>
+</table>
 
-1. Start the application
-   ```bash
-   streamlit run app.py
-   ```
-
-2. Open your web browser and go to `http://localhost:8501`
-
-3. Upload a document (text file)
-
-4. Configure processing options in the sidebar
-
-5. Click "Process Document" to generate enhanced notes
-
-## Project Structure
-
-- `app.py`: Main entry point and homepage
-- `pages/`: Streamlit pages for different features
-  - `01_Summary.py`: Document summarization page
-- `lean/`: Core processing logic
-  - `async_openai_adapter.py`: OpenAI API communication
-  - `booster.py`: Performance enhancement for processing
-  - `chunker.py`: Document chunking functionality
-  - `document.py`: Document analysis
-  - `orchestrator.py`: Process orchestration
-  - `summarizer.py`: Chunk summarization
-  - `synthesizer.py`: Summary synthesis
-- `passes/`: Analysis pass definitions
-  - `passes.py`: Pass processor logic
-  - `configurations/`: JSON configurations for passes
-- `ui_utils/`: UI helper utilities
-  - `refiner.py`: Summary refinement tools
-- `data/`: Directory for sample data
-- `outputs/`: Directory for generated outputs
-
-## Development Notes
-
-- Use `.env` for environment variables and API keys
-- Run tests before making significant changes
-- Keep the architecture modular to easily add new passes
-
-## License
-
-[MIT License](LICENSE)
 ## File Structure
 
 ```
-note-summarizer-v2/
-├── .env                (with your OPENAI_API_KEY)
-├── app.py              (Simple Streamlit entry point)
-├── lean/               (Core processing logic)
-│   ├── init.py
+better-notes/
+├── agents/
+│   ├── __init__.py
+│   ├── base.py                # Base agent setup with common functionality
+│   ├── extractor.py           # Generic extraction agent
+│   ├── aggregator.py          # Generic aggregation agent
+│   ├── evaluator.py           # Generic evaluation agent
+│   ├── formatter.py           # Generic formatting agent
+│   ├── utils/
+│   │   └── __init__.py
+│   └── config/    
+│       └── issues_config.json # Issues identification config
+│       └── action_config.json # Action items config
+│       └── opp_config.json    # Opportunities config
+├── crews/
+│   ├── __init__.py
+│   ├── issues_crew.py         # Issues identification crew
+│   ├── action_crew.py         # Action items crew
+│   └── opp_crew.py            # Opportunities crew
+├── lean/
+│   ├── __init__.py
 │   ├── async_openai_adapter.py
-│   ├── booster.py
 │   ├── chunker.py
 │   ├── document.py
-│   ├── factory.py
-│   ├── itemizer.py     (will become a pass later)
 │   ├── options.py
-│   ├── refiner.py
-│   ├── summarizer.py
 │   └── synthesizer.py
-├── pages/              (Streamlit pages)
-│   ├── 1_Home.py
-│   ├── 2_Issue_Analysis.py
-│   └── ...             (add other pass pages as needed)
-├── passes/             (Pass definitions and configurations)
-│   ├── init.py
-│   ├── passes.py
-│   └── configurations/
-│       ├── issue_identification.json
-│       ├── opportunity_identification.json
-│       └── ...        (add other pass configs as needed)
-└── README.md           (Project description and instructions).
+├── pages/
+│   ├── 01_Summary.py          # Original summary page
+│   └── 02_Multi_Agent.py      # Generic multi-agent page
+├── ui_utils/
+│   ├── __init__.py
+│   └── refiner.py
+├── app.py                     # Main entry point
+├── orchestrator.py            # Multi-crew coordinator
+└── README.md
 ```
+
+## How It Works
+
+Better Notes transforms document analysis through crew-based processing:
+
+1. **Document Chunking**: Intelligently segments documents based on structure
+2. **Agent Specialization**: Each agent focuses on a specific aspect of analysis
+3. **Parallel Processing**: Multiple agents work simultaneously on different chunks
+4. **Insight Aggregation**: Results are combined, deduplicated, and organized
+5. **Quality Evaluation**: Outputs are assessed for severity, impact, and relevance
+6. **Presentation Formatting**: Findings are structured into clear, actionable formats
+
+## Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/better-notes.git
+cd better-notes
+
+# Create a virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install requirements
+pip install -r requirements.txt
+
+# Set up OpenAI API key
+cp .env.example .env
+# Edit .env to add your API key
+
+# Run the application
+streamlit run app.py
+```
+
+## Example Use Cases
+
+- **Meeting Transcript Analysis**: Convert lengthy meeting transcripts into structured notes with issues, actions, and opportunities
+- **Research Document Processing**: Extract key findings and potential research directions from academic papers
+- **Business Report Evaluation**: Identify critical issues and strategic opportunities from quarterly reports
+- **Project Documentation Review**: Extract action items and potential problems from project documentation
+
+## Dependencies
+
+- CrewAI: Multi-agent orchestration framework
+- OpenAI API: Large language model access
+- Streamlit: Web interface
+- AsyncIO: Parallel processing support
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+<p align="center">
+<strong>Better notes through better agents.</strong><br>
+Divide, conquer, and synthesize your documents through collaborative AI.
+</p>

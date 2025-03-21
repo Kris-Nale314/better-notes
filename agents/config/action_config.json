@@ -1,0 +1,210 @@
+{
+    "agent_config": {
+      "extraction": {
+        "role": "Action Item Extractor",
+        "goal": "Identify all potential action items, tasks, and commitments in document chunks",
+        "backstory": "I'm an expert at identifying concrete commitments, tasks, and follow-up items in discussions. I distinguish between firm commitments and casual suggestions."
+      },
+      "aggregation": {
+        "role": "Action Item Aggregator",
+        "goal": "Combine and deduplicate action items from multiple extractions",
+        "backstory": "I specialize in organizing action items, removing duplicates while preserving important context and ownership information."
+      },
+      "evaluation": {
+        "role": "Action Item Evaluator",
+        "goal": "Assess the commitment level, ownership, and timeframe of identified action items",
+        "backstory": "I'm an expert at determining which potential action items represent real commitments versus casual suggestions or hypothetical ideas."
+      },
+      "formatting": {
+        "role": "Action Report Formatter",
+        "goal": "Create an actionable, clear report that organizes tasks by owner, priority and timeline",
+        "backstory": "I create action-oriented reports that make it easy to track who needs to do what and by when."
+      }
+    },
+    "extraction": {
+      "prompt_template": "You are an expert analyst specializing in action item identification. Your task is to carefully analyze the following document chunk to identify any tasks, commitments, follow-ups, or action items.\n\nCHUNK TEXT:\n{chunk_text}\n\nDOCUMENT CONTEXT: {document_info.get('preview_analysis', {}).get('summary', 'No summary available')}\n\nFor each action item you identify, please provide:\n1. A clear description of the action\n2. Who is responsible (if specified)\n3. Any deadline or timeframe mentioned\n4. The exact quote where this action was mentioned\n\nFOCUS ONLY ON CLEAR COMMITMENTS. Be careful to distinguish between:\n- Firm commitments: \"John will update the report by Friday\"\n- Casual suggestions: \"We might want to look into expanding to New York\"\n- Hypothetical statements: \"If we were to build a new office...\"\n\nExtract only items where someone has clearly committed to take an action or has been assigned a task.",
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "action_items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "description": "A clear description of the action to be taken"
+                },
+                "owner": {
+                  "type": "string",
+                  "description": "Person or group responsible for the action"
+                },
+                "timeframe": {
+                  "type": "string",
+                  "description": "Deadline or timeframe, if specified"
+                },
+                "quote": {
+                  "type": "string",
+                  "description": "The exact text where this action was mentioned"
+                },
+                "commitment_level": {
+                  "type": "string",
+                  "enum": ["definite", "probable", "possible", "unclear"],
+                  "description": "Assessment of how firm the commitment is"
+                }
+              },
+              "required": ["description", "quote", "commitment_level"]
+            }
+          }
+        },
+        "required": ["action_items"]
+      }
+    },
+    "aggregation": {
+      "prompt_template": "You are an expert aggregator specializing in consolidating action items. Your task is to review all the action items identified in different chunks of a document and create a consolidated, deduplicated list.\n\nDOCUMENT CONTEXT: {document_info.get('preview_analysis', {}).get('summary', 'No summary available')}\n\nWhen combining similar action items:\n1. Create a clear, specific description that captures the full scope\n2. Preserve all owner information (who is responsible)\n3. Use the most specific timeframe if multiple are mentioned\n4. Keep track of all relevant quotes that mention the action\n5. Assess the overall commitment level based on language used\n\nFocus on creating a comprehensive but non-redundant list of actions that accurately represents what people have committed to do.",
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "aggregated_actions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "description": "A clear description of the action to be taken"
+                },
+                "owner": {
+                  "type": "string",
+                  "description": "Person or group responsible for the action"
+                },
+                "timeframe": {
+                  "type": "string",
+                  "description": "Deadline or timeframe, if specified"
+                },
+                "quotes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "The exact texts where this action was mentioned"
+                },
+                "mention_count": {
+                  "type": "integer",
+                  "description": "How many times this action was mentioned"
+                },
+                "commitment_level": {
+                  "type": "string",
+                  "enum": ["definite", "probable", "possible", "unclear"],
+                  "description": "Assessment of how firm the commitment is"
+                }
+              },
+              "required": ["description", "owner", "commitment_level", "mention_count"]
+            }
+          }
+        },
+        "required": ["aggregated_actions"]
+      }
+    },
+    "evaluation": {
+      "prompt_template": "You are an expert evaluator specializing in assessing action items for clarity, ownership, and commitment level. Your task is to evaluate each action item and classify it appropriately.\n\nDOCUMENT CONTEXT: {document_info.get('preview_analysis', {}).get('summary', 'No summary available')}\n\nFor each action item, assess:\n\n1. COMMITMENT LEVEL:\n   - DEFINITE: Clear commitment with specific owner and often a timeline (\"I will...\", \"Jane needs to...\", \"Team X must...\")\n   - PROBABLE: Strong indication of intent but without firm commitment (\"We should...\", \"Plan to...\", \"Need to...\")\n   - POSSIBLE: Suggestions or ideas without clear commitment (\"It might be good to...\", \"Consider...\", \"We could...\")\n   - UNCLEAR: Cannot determine commitment level from context\n\n2. OWNERSHIP CLARITY:\n   - ASSIGNED: Clear owner is specified (individual or team)\n   - IMPLIED: Owner is implied but not explicitly stated\n   - UNASSIGNED: No owner specified\n\n3. TIMEFRAME CLARITY:\n   - SPECIFIC: Clear deadline (\"by Friday\", \"next week\", \"Q2\")\n   - GENERAL: General timeframe (\"soon\", \"next quarter\", \"later\")\n   - NONE: No timeframe mentioned\n\nIf an item is merely a suggestion or hypothetical idea with no commitment to action, mark it as \"SUGGESTION_ONLY\" and recommend removing it from the action item list.",
+      "criteria": {
+        "commitment": {
+          "definite": "Clear, explicit commitment to take action",
+          "probable": "Strong indication of intent but without explicit commitment",
+          "possible": "Suggestion or idea without clear commitment",
+          "unclear": "Cannot determine commitment level from context"
+        },
+        "ownership": {
+          "assigned": "Clear owner specified (individual or team)",
+          "implied": "Owner implied but not explicitly stated",
+          "unassigned": "No owner specified"
+        },
+        "timeframe": {
+          "specific": "Clear deadline or specific timeframe",
+          "general": "General timeframe mentioned",
+          "none": "No timeframe mentioned"
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "evaluated_actions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "description": "A clear description of the action to be taken"
+                },
+                "owner": {
+                  "type": "string",
+                  "description": "Person or group responsible for the action"
+                },
+                "timeframe": {
+                  "type": "string",
+                  "description": "Deadline or timeframe, if specified"
+                },
+                "commitment_level": {
+                  "type": "string",
+                  "enum": ["definite", "probable", "possible", "unclear"],
+                  "description": "Assessment of how firm the commitment is"
+                },
+                "ownership_clarity": {
+                  "type": "string",
+                  "enum": ["assigned", "implied", "unassigned"],
+                  "description": "Assessment of ownership clarity"
+                },
+                "timeframe_clarity": {
+                  "type": "string",
+                  "enum": ["specific", "general", "none"],
+                  "description": "Assessment of timeframe clarity"
+                },
+                "include_as_action": {
+                  "type": "boolean",
+                  "description": "Whether this should be included as a true action item"
+                },
+                "rationale": {
+                  "type": "string",
+                  "description": "Brief explanation for the evaluation"
+                }
+              },
+              "required": ["description", "commitment_level", "ownership_clarity", "timeframe_clarity", "include_as_action"]
+            }
+          }
+        },
+        "required": ["evaluated_actions"]
+      }
+    },
+    "formatting": {
+      "prompt_template": "You are an expert documentation specialist focusing on action item reports. Your task is to format the evaluated action items into a clear, actionable report that makes it easy to track tasks and responsibilities.\n\nDOCUMENT CONTEXT: {document_info.get('preview_analysis', {}).get('summary', 'No summary available')}\n\nFollow these organizational principles:\n\n1. ONLY include items marked as \"include_as_action: true\"\n2. Begin with an executive summary of key action items\n3. Group action items by owner first, then by timeframe\n4. Use rich Markdown formatting to improve readability\n5. Create a summary table showing action items by owner\n\nUse these formatting elements:\n- Use level 1 (#) headers for main sections\n- Use level 2 (##) headers for owners\n- Use level 3 (###) headers for timeframes\n- Use checkboxes for individual action items\n- Use bold text for critical deadlines\n- Use blockquotes (>) for direct references from the document\n- Use tables for the owner summary\n\nCreate a professional, actionable report that makes it absolutely clear who needs to do what and by when.",
+      "format_template": "# Action Items Report\n\n## Executive Summary\n\n[Provide a concise overview of the key action items, particularly those with definite commitments and clear ownership]\n\n---\n\n## Action Items by Owner\n\n### [Owner 1]\n\n- [ ] [Action 1] - **Deadline:** [timeframe if any]\n  > [Direct quote from document]\n\n- [ ] [Action 2] - **Deadline:** [timeframe if any]\n  > [Direct quote from document]\n\n### [Owner 2]\n\n- [ ] [Action 1] - **Deadline:** [timeframe if any]\n  > [Direct quote from document]\n\n---\n\n## Unassigned Action Items\n\n- [ ] [Action 1]\n- [ ] [Action 2]\n\n---\n\n## Action Items by Timeframe\n\n### Immediate/This Week\n\n- [ ] [Owner]: [Action]\n\n### Near-Term/Next Month\n\n- [ ] [Owner]: [Action]\n\n### Future/Unspecified\n\n- [ ] [Owner]: [Action]\n\n---\n\n## Summary Table\n\n| Owner | Number of Action Items |\n|-------|------------------------|\n| [Owner 1] | [count] |\n| [Owner 2] | [count] |\n| Unassigned | [count] |\n| **Total** | **[total count]** |\n\n",
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "formatted_report": {
+            "type": "string",
+            "description": "The complete formatted report in Markdown"
+          },
+          "executive_summary": {
+            "type": "string",
+            "description": "A standalone executive summary of action items"
+          },
+          "action_item_count": {
+            "type": "integer",
+            "description": "Total number of action items included"
+          },
+          "unassigned_count": {
+            "type": "integer",
+            "description": "Number of action items without clear owners"
+          },
+          "owner_summary": {
+            "type": "object",
+            "description": "Count of action items by owner"
+          }
+        },
+        "required": ["formatted_report", "executive_summary"]
+      }
+    }
+  }

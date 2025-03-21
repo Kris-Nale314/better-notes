@@ -1,0 +1,170 @@
+{
+  "agent_config": {
+    "extraction": {
+      "role": "Issue Extractor",
+      "goal": "Identify all potential issues, problems, and challenges in document chunks",
+      "backstory": "I'm an expert at spotting problems, challenges, and risks in documents. I have a keen eye for explicit and implicit issues."
+    },
+    "aggregation": {
+      "role": "Issue Aggregator",
+      "goal": "Combine and deduplicate issues from multiple extractions",
+      "backstory": "I specialize in organizing and consolidating information, removing duplicates while preserving important context."
+    },
+    "evaluation": {
+      "role": "Issue Evaluator",
+      "goal": "Assess severity of identified issues using defined criteria",
+      "backstory": "I'm an expert at prioritizing and evaluating problems. I categorize issues as critical, high, medium, or low based on their impact and urgency."
+    },
+    "formatting": {
+      "role": "Report Formatter",
+      "goal": "Create a visually organized, comprehensive report that presents issues in a logical manner",
+      "backstory": "I'm a documentation specialist who creates clear, structured reports that make complex information easy to understand and act upon. I excel at organizing information for maximum clarity and impact."
+    }
+  },
+  "extraction": {
+    "prompt_template": "You are an expert analyst specializing in issue identification. Your task is to carefully analyze the following document chunk to identify any issues, problems, challenges, or concerns.\n\nCHUNK TEXT:\n{chunk_text}\n\nFor each issue you identify, please provide:\n1. A clear, concise title\n2. A detailed description of the issue\n3. Relevant context or direct quotes from the document\n\nFocus on the most significant issues first. Provide specific context when possible.",
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "A short, descriptive title for the issue"
+              },
+              "description": {
+                "type": "string",
+                "description": "A clear description of the issue, its implications, and potential impacts"
+              },
+              "context": {
+                "type": "string",
+                "description": "Relevant text from the document that mentions or implies this issue"
+              }
+            },
+            "required": ["title", "description"]
+          }
+        }
+      },
+      "required": ["issues"]
+    }
+  },
+  "aggregation": {
+    "prompt_template": "You are an expert aggregator specializing in combining multiple issue lists. Your task is to review all the issues identified in different chunks of a document and create a consolidated, deduplicated list.\n\nFor each unique issue:\n1. Create a clear, concise title\n2. Combine descriptions from similar issues\n3. Track how many times the issue was mentioned\n4. Preserve relevant context from different mentions\n\nRemove duplicate issues but preserve the richness of multiple mentions.",
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "aggregated_issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "A short, descriptive title for the issue"
+              },
+              "description": {
+                "type": "string",
+                "description": "A clear description combining insights from all mentions"
+              },
+              "mention_count": {
+                "type": "integer",
+                "description": "How many times this issue was mentioned"
+              },
+              "contexts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Relevant text snippets from different mentions"
+              }
+            },
+            "required": ["title", "description", "mention_count"]
+          }
+        }
+      },
+      "required": ["aggregated_issues"]
+    }
+  },
+  "evaluation": {
+    "prompt_template": "You are an expert evaluator specializing in assessing issue severity. Your task is to evaluate each issue and assign an appropriate severity level.\n\nFor each issue, assign one of these severity levels:\n- CRITICAL\n- HIGH\n- MEDIUM\n- LOW\n\nProvide a brief justification for each severity rating.",
+    "criteria": {
+      "critical": "Represents immediate threats to operations, security, or compliance; could cause significant financial loss or reputational damage; blocks major processes or deliverables",
+      "high": "Significantly impacts effectiveness or efficiency; requires substantial resources to address; will likely escalate if not addressed soon",
+      "medium": "Causes ongoing inefficiency or limitations; negatively impacts some stakeholders; should be addressed, but isn't urgent",
+      "low": "Represents minor inconveniences or concerns; has minimal impact on operations or outcomes; could be addressed through regular maintenance or improvements"
+    },
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "evaluated_issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "A short, descriptive title for the issue"
+              },
+              "description": {
+                "type": "string",
+                "description": "A clear description of the issue"
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["critical", "high", "medium", "low"],
+                "description": "The severity level of the issue"
+              },
+              "rationale": {
+                "type": "string",
+                "description": "Brief justification for the severity rating"
+              },
+              "mention_count": {
+                "type": "integer",
+                "description": "How many times this issue was mentioned"
+              }
+            },
+            "required": ["title", "description", "severity", "rationale"]
+          }
+        }
+      },
+      "required": ["evaluated_issues"]
+    }
+  },
+  "formatting": {
+    "prompt_template": "You are an expert documentation specialist. Your task is to format the evaluated issues into a clear, visually appealing, and well-organized report that presents the information in the most useful way possible.\n\nFollow these organizational principles:\n\n1. Begin with an executive summary highlighting the most critical findings\n2. Group issues by severity (Critical, High, Medium, Low)\n3. Within each severity group, organize issues thematically when possible\n4. Use rich Markdown formatting to improve readability\n5. Create a summary table at the end showing issue counts by severity\n\nUse these formatting elements:\n- Use level 1 (#) headers for main sections\n- Use level 2 (##) headers for severity levels\n- Use level 3 (###) headers for individual issues\n- Use bold text for important points\n- Use bullet points for lists of related ideas\n- Use blockquotes (>) for direct references from the document\n- Use tables for structured information\n- Use horizontal rules (---) to separate major sections\n\nCreate a professional, actionable report that helps the reader quickly understand the issues and their implications.",
+    "format_template": "# Issues Analysis Report\n\n## Executive Summary\n\n[Provide a concise overview of the key findings, focusing on Critical and High-severity issues. Highlight trends and patterns.]\n\n---\n\n## Critical Issues\n\n[List all Critical issues here, each with its own subsection]\n\n## High-Priority Issues\n\n[List all High-priority issues here, each with its own subsection]\n\n## Medium-Priority Issues\n\n[List all Medium-priority issues here, each with its own subsection]\n\n## Low-Priority Issues\n\n[List all Low-priority issues here, each with its own subsection]\n\n---\n\n## Summary Statistics\n\n| Severity | Count | Percentage |\n|----------|-------|------------|\n| Critical | x     | xx%        |\n| High     | x     | xx%        |\n| Medium   | x     | xx%        |\n| Low      | x     | xx%        |\n| **Total**| **x** | **100%**   |\n\n---\n\n## Recommendations\n\n[Provide 3-5 key recommendations based on the identified issues]\n\n",
+    "output_schema": {
+      "type": "object",
+      "properties": {
+        "formatted_report": {
+          "type": "string",
+          "description": "The complete formatted report in Markdown"
+        },
+        "executive_summary": {
+          "type": "string",
+          "description": "A standalone executive summary"
+        },
+        "critical_issues_count": {
+          "type": "integer",
+          "description": "Number of critical issues"
+        },
+        "high_issues_count": {
+          "type": "integer",
+          "description": "Number of high-priority issues"
+        },
+        "medium_issues_count": {
+          "type": "integer",
+          "description": "Number of medium-priority issues"
+        },
+        "low_issues_count": {
+          "type": "integer",
+          "description": "Number of low-priority issues"
+        }
+      },
+      "required": ["formatted_report", "executive_summary"]
+    }
+  }
+}

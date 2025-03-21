@@ -1,0 +1,7 @@
+{
+  "pass_type": "issue_identification",
+  "purpose": "Identify issues, problems, challenges, and concerns in the document",
+  "instructions": "Analyze the document to identify and describe issues or problems mentioned",
+  "process_by_chunks": false,
+  "prompt_template": "You are an expert analyst specializing in issue identification. Your task is to analyze the following document to identify any issues, problems, challenges, or concerns.\n\nDocument Summary:\n{summary}\n\nDocument Information:\n- Document Type: {document_info.get('is_meeting_transcript', False) and 'Meeting Transcript' or 'Document'}\n\nUser Instructions: {options.get('user_instructions', 'Identify all significant issues.')}\n\nFor each issue you identify, please provide:\n1. A clear, concise title\n2. A detailed description of the issue\n3. The severity level (critical, high, medium, or low)\n4. Who mentioned or is associated with the issue (if identifiable)\n5. Relevant context or direct quotes from the document\n\nReturn the results in JSON format:\n```json\n{\n  \"issues\": [\n    {\n      \"title\": \"Issue title\",\n      \"description\": \"Detailed description\",\n      \"severity\": \"critical|high|medium|low\",\n      \"speaker\": \"Person who mentioned it (if applicable)\",\n      \"context\": \"Relevant quote or context from the document\"\n    }\n  ],\n  \"summary\": \"Brief summary of the key issues identified\"\n}\n```\n\nFocus on the most significant issues first."
+}
