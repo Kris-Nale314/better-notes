@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from lean.options import ProcessingOptions
-from ui_utils.ui_enhance import apply_custom_css
 
 
 # Check for OpenAI API key
@@ -33,9 +32,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+# Import UI enhancements
+from ui_utils.ui_enhance import apply_custom_css
 
 apply_custom_css()
-
 
 # --- Main Page Content ---
 st.title("Better Notes")

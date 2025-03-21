@@ -85,6 +85,183 @@ def apply_custom_css():
             border-left-color: #9b59b6;
         }
         
+        /* Rich HTML Issues Report Styling */
+        .issues-report {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: rgba(255, 255, 255, 0.9);
+            padding: 0 10px;
+        }
+        
+        .issues-report h1 {
+            font-size: 1.8em;
+            margin-bottom: 25px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+        }
+        
+        .issues-report h2 {
+            font-size: 1.4em;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            position: relative;
+        }
+        
+        .issues-report .executive-summary {
+            background-color: rgba(108, 92, 231, 0.1);
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-left: 4px solid #6c5ce7;
+        }
+        
+        .issues-report .issue-card {
+            background-color: rgba(60, 60, 70, 0.3);
+            border-radius: 8px;
+            margin: 15px 0;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid;
+        }
+        
+        .issues-report .issue-card h3 {
+            font-size: 1.15em;
+            margin: 0;
+            padding: 12px 15px;
+            background-color: rgba(30, 30, 40, 0.4);
+        }
+        
+        .issues-report .issue-meta {
+            padding: 5px 15px;
+            background-color: rgba(30, 30, 40, 0.2);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .issues-report .issue-content {
+            padding: 15px;
+        }
+        
+        .issues-report .issue-content p {
+            margin: 10px 0;
+        }
+        
+        .issues-report .issue-card.critical {
+            border-left-color: #ff5252;
+        }
+        
+        .issues-report .issue-card.high {
+            border-left-color: #ff9f43;
+        }
+        
+        .issues-report .issue-card.medium {
+            border-left-color: #fdcb6e;
+        }
+        
+        .issues-report .issue-card.low {
+            border-left-color: #20c997;
+        }
+        
+        .issues-report .severity {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 500;
+        }
+        
+        .issues-report .severity.critical {
+            background-color: rgba(255, 80, 80, 0.2);
+            color: #ff5252;
+            border: 1px solid rgba(255, 80, 80, 0.3);
+        }
+        
+        .issues-report .severity.high {
+            background-color: rgba(255, 159, 67, 0.2);
+            color: #ff9f43;
+            border: 1px solid rgba(255, 159, 67, 0.3);
+        }
+        
+        .issues-report .severity.medium {
+            background-color: rgba(253, 203, 110, 0.2);
+            color: #fdcb6e;
+            border: 1px solid rgba(253, 203, 110, 0.3);
+        }
+        
+        .issues-report .severity.low {
+            background-color: rgba(32, 201, 151, 0.2);
+            color: #20c997;
+            border: 1px solid rgba(32, 201, 151, 0.3);
+        }
+        
+        .issues-report .summary-stats table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        
+        .issues-report .summary-stats th {
+            background-color: rgba(60, 60, 70, 0.4);
+            padding: 10px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        .issues-report .summary-stats td {
+            padding: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .issues-report .summary-stats tr:nth-child(even) {
+            background-color: rgba(60, 60, 70, 0.2);
+        }
+        
+        .issues-report .summary-stats .total-row {
+            border-top: 2px solid rgba(255, 255, 255, 0.1);
+            background-color: rgba(60, 60, 70, 0.3);
+        }
+        
+        .issues-report .severity-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .issues-report .severity-indicator.critical {
+            background-color: #ff5252;
+        }
+        
+        .issues-report .severity-indicator.high {
+            background-color: #ff9f43;
+        }
+        
+        .issues-report .severity-indicator.medium {
+            background-color: #fdcb6e;
+        }
+        
+        .issues-report .severity-indicator.low {
+            background-color: #20c997;
+        }
+        
+        .issues-report .recommendations {
+            background-color: rgba(70, 70, 90, 0.2);
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin: 25px 0;
+        }
+        
+        .issues-report .recommendations ul {
+            margin: 10px 0;
+            padding-left: 25px;
+        }
+        
+        .issues-report .recommendations li {
+            margin-bottom: 10px;
+        }
+
         /* Flow diagram */
         .flow-diagram {
             background-color: rgba(60, 60, 80, 0.1);
@@ -126,12 +303,24 @@ def apply_custom_css():
         .rich-output-container h2 {
             margin-top: 25px;
             padding-bottom: 8px;
+            padding-top: 15px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 1.5em;
+            clear: both;
         }
         
         .rich-output-container h3 {
             margin-top: 20px;
             color: rgba(255, 255, 255, 0.9);
+            font-size: 1.3em;
+        }
+        
+        /* Fix for emoji in headers */
+        .rich-output-container h2 img.emojione,
+        .rich-output-container h2 span.emoji {
+            display: inline;
+            vertical-align: middle;
+            margin-right: 0.2em;
         }
         
         .rich-output-container blockquote {
@@ -389,6 +578,11 @@ def enhance_markdown_with_icons(markdown_text, analysis_type):
     for original, replacement in replacements.items():
         enhanced_text = enhanced_text.replace(original, replacement)
     
+    # Also handle raw emoji in headings (already in the source)
+    # This regex matches headings with emojis but without the proper space after
+    import re
+    enhanced_text = re.sub(r'(##\s+[🔴🟠🟡🟢⚠️📊])', r'\1 ', enhanced_text)
+    
     # Add horizontal rules between sections for better visual separation
     # Look for level 2 headings (##) and add a horizontal rule before them if they don't already have one
     lines = enhanced_text.split('\n')
@@ -402,19 +596,31 @@ def enhance_markdown_with_icons(markdown_text, analysis_type):
 
 def enhance_result_display(result_text, analysis_type):
     """
-    Enhance the markdown result text with styling and visual elements.
+    Enhance the result text with styling and visual elements.
     
     Args:
-        result_text: Original markdown result text
+        result_text: Original result text (markdown or HTML)
         analysis_type: Type of analysis ("issues", "actions", "insights")
         
     Returns:
-        HTML string with enhanced markdown
+        HTML string with enhanced display
     """
+    # Import module explicitly to avoid any namespace issues
+    import re as regex_module
+    
+    # Check if this is already HTML (issues now return HTML)
+    if analysis_type == "issues":
+        if "<div" in result_text or "<h1" in result_text:
+            # Clean up any script tags for security
+            cleaned_text = regex_module.sub(r'<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>', '', result_text)
+            # Directly return the HTML content
+            return cleaned_text
+    
+    # Otherwise, process as markdown (for backward compatibility)
     # First enhance the markdown with icons
     enhanced_markdown = enhance_markdown_with_icons(result_text, analysis_type)
     
-    # Then apply other enhancements like badges
+    # Then apply other enhancements
     if analysis_type == "issues":
         # Add badges for severity levels
         enhanced_markdown = enhanced_markdown.replace(
@@ -433,6 +639,15 @@ def enhance_result_display(result_text, analysis_type):
             "**Severity:** low", 
             "**Severity:** low <span class='low-badge'>Low</span>"
         )
+        
+        # Fix issue headers that might have emojis without proper Markdown formatting
+        enhanced_markdown = regex_module.sub(r'(## 🔴) Critical Issues', r'## 🔴 Critical Issues', enhanced_markdown)
+        enhanced_markdown = regex_module.sub(r'(## 🟠) High-Priority Issues', r'## 🟠 High-Priority Issues', enhanced_markdown)
+        enhanced_markdown = regex_module.sub(r'(## 🟡) Medium-Priority Issues', r'## 🟡 Medium-Priority Issues', enhanced_markdown)
+        enhanced_markdown = regex_module.sub(r'(## 🟢) Low-Priority Issues', r'## 🟢 Low-Priority Issues', enhanced_markdown)
+        
+        # Process each issue into a better-formatted card
+        enhanced_markdown = format_issues_as_cards(enhanced_markdown)
     
     # Wrap executive summary in a special div if it exists
     if "# 📋 Executive Summary" in enhanced_markdown:
@@ -446,8 +661,156 @@ def enhance_result_display(result_text, analysis_type):
                 exec_part[1]
             )
     
+    # Ensure proper newlines before headings - critical for markdown rendering
+    enhanced_markdown = regex_module.sub(r'([^\n])(#+\s+)', r'\1\n\n\2', enhanced_markdown)
+    
     # Return the enhanced markdown wrapped in the rich output container
     return f"<div class='rich-output-container'>{enhanced_markdown}</div>"
+
+def format_issues_as_cards(markdown_text):
+    """
+    Format issue entries as visually distinct cards.
+    
+    Args:
+        markdown_text: The markdown text to process
+        
+    Returns:
+        Processed markdown with issue cards
+    """
+    # Import module explicitly to avoid any namespace issues
+    import re as regex_module
+    
+    # Split the markdown into sections for processing
+    sections = []
+    current_section = []
+    current_severity = None
+    
+    lines = markdown_text.split('\n')
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        
+        # Check for main section headers (Critical, High, etc.)
+        if regex_module.match(r'^## 🔴 Critical Issues', line):
+            if current_section:
+                sections.append((current_severity, current_section))
+            current_section = [line]
+            current_severity = "critical"
+        elif regex_module.match(r'^## 🟠 High-Priority Issues', line):
+            if current_section:
+                sections.append((current_severity, current_section))
+            current_section = [line]
+            current_severity = "high"
+        elif regex_module.match(r'^## 🟡 Medium-Priority Issues', line):
+            if current_section:
+                sections.append((current_severity, current_section))
+            current_section = [line]
+            current_severity = "medium"
+        elif regex_module.match(r'^## 🟢 Low-Priority Issues', line):
+            if current_section:
+                sections.append((current_severity, current_section))
+            current_section = [line]
+            current_severity = "low"
+        # Check for other main headers
+        elif regex_module.match(r'^## ', line) or regex_module.match(r'^# ', line):
+            if current_section:
+                sections.append((current_severity, current_section))
+            current_section = [line]
+            current_severity = None
+        else:
+            current_section.append(line)
+        i += 1
+    
+    # Add the last section
+    if current_section:
+        sections.append((current_severity, current_section))
+    
+    # Process each section
+    result = []
+    for severity, section in sections:
+        if severity in ["critical", "high", "medium", "low"]:
+            # Process issue entries in this section
+            result.extend(process_issue_section(section, severity))
+        else:
+            # Keep section as is
+            result.extend(section)
+    
+    return '\n'.join(result)
+
+
+def process_issue_section(section_lines, severity):
+    """
+    Process a section of issues to format individual issues as cards.
+    
+    Args:
+        section_lines: List of lines in the section
+        severity: Severity level of this section
+        
+    Returns:
+        List of processed lines
+    """
+    # Import re module explicitly to avoid namespace issues
+    import re as regex_module
+    
+    # First line is the section header, keep it
+    result = [section_lines[0], ""]
+    
+    # Process the rest of the section
+    issue_blocks = []
+    current_issue = []
+    
+    # Check if there are any issues in this section
+    no_issues_found = False
+    for line in section_lines[1:]:
+        if "No critical issues were identified" in line or "No high-priority issues were identified" in line or \
+           "No medium-priority issues were identified" in line or "No low-priority issues were identified" in line:
+            no_issues_found = True
+            result.append(line)
+            break
+    
+    if no_issues_found:
+        return result
+    
+    # Process each issue
+    i = 1
+    while i < len(section_lines):
+        line = section_lines[i]
+        
+        # Check for issue title (level 3 header)
+        if line.startswith("### "):
+            if current_issue:
+                issue_blocks.append(current_issue)
+            current_issue = [line]
+        elif current_issue:
+            current_issue.append(line)
+        i += 1
+    
+    # Add the last issue
+    if current_issue:
+        issue_blocks.append(current_issue)
+    
+    # Format each issue block
+    for issue in issue_blocks:
+        card_lines = []
+        
+        # Extract title from first line (### Title)
+        title = issue[0][4:].strip() if issue and issue[0].startswith("### ") else "Issue"
+        
+        # Start issue card
+        card_lines.append(f'<div class="issue-card issue-{severity}">')
+        card_lines.append(f'<h3>{title}</h3>')
+        
+        # Add the rest of the issue content
+        for line in issue[1:]:
+            card_lines.append(line)
+        
+        # Close issue card
+        card_lines.append('</div>')
+        
+        # Add to result
+        result.extend(card_lines)
+    
+    return result
 
 def format_log_entries(log_entries):
     """
