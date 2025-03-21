@@ -10,7 +10,8 @@ logger = logging.getLogger(__name__)
 class BaseAgent:
     """
     Base class for all specialized agents in Better Notes.
-    Provides common functionality and configuration loading.
+    Provides common functionality and configuration loading with optimizations
+    for handling large documents.
     """
     
     def __init__(
@@ -19,10 +20,11 @@ class BaseAgent:
         agent_type: str,
         crew_type: str,
         config: Optional[Dict[str, Any]] = None,
-        verbose: bool = True
+        verbose: bool = True,
+        max_chunk_size: int = 1500
     ):
         """
-        Initialize a base agent.
+        Initialize a base agent with optimizations for large document handling.
         
         Args:
             llm_client: LLM client for agent communication
@@ -30,11 +32,13 @@ class BaseAgent:
             crew_type: Type of crew (issues, actions, opportunities)
             config: Optional pre-loaded configuration
             verbose: Whether to enable verbose mode
+            max_chunk_size: Maximum size of text chunks to process
         """
         self.llm_client = llm_client
         self.agent_type = agent_type
         self.crew_type = crew_type
         self.verbose = verbose
+        self.max_chunk_size = max_chunk_size
         
         # Load or use provided config
         self.config = config if config else self.load_config(crew_type)
@@ -45,13 +49,23 @@ class BaseAgent:
             # Fallback to default values if specific config not found
             agent_config = self._get_default_agent_config(agent_type, crew_type)
         
-        # Create the CrewAI agent
+        # Optimize backstory for large document handling
+        backstory = agent_config.get("backstory", f"I am an expert in {crew_type} {agent_type}.")
+        compact_backstory = backstory[:200] if len(backstory) > 200 else backstory
+        
+        # Create the CrewAI agent with optimized settings
         self.agent = Agent(
             role=agent_config.get("role", f"{crew_type.title()} {agent_type.title()} Agent"),
             goal=agent_config.get("goal", f"Process {crew_type} through {agent_type}"),
-            backstory=agent_config.get("backstory", f"I am an expert in {crew_type} {agent_type}."),
+            backstory=compact_backstory,
             verbose=verbose,
-            llm=llm_client
+            llm=llm_client,
+            # Add specific settings to help with large contexts
+            max_iterations=2,
+            max_rpm=10,
+            llm_config={
+                "max_tokens": 600
+            }
         )
     
     def load_config(self, crew_type: str) -> Dict[str, Any]:
@@ -105,10 +119,10 @@ class BaseAgent:
                     "goal": "Extract all action items, tasks, and commitments from documents",
                     "backstory": "I specialize in identifying tasks and responsibilities in documents."
                 },
-                "opportunities": {
-                    "role": "Opportunity Identifier",
-                    "goal": "Discover potential improvements and opportunities in documents",
-                    "backstory": "I excel at finding opportunities where others see challenges."
+                "insights": {
+                    "role": "Insight Extractor",
+                    "goal": "Discover key insights and context from documents",
+                    "backstory": "I excel at understanding the essence of communications."
                 }
             },
             "aggregation": {
@@ -152,6 +166,17 @@ class BaseAgent:
         """
         return self.config.get(self.agent_type, {}).get("output_schema", {})
     
+    def get_format_template(self) -> str:
+        """
+        Get the format template for formatting agents.
+        
+        Returns:
+            Format template string
+        """
+        if self.agent_type == "formatting":
+            return self.config.get("formatting", {}).get("format_template", "")
+        return ""
+    
     def build_prompt(self, context: Dict[str, Any] = None) -> str:
         """
         Build a prompt using the template and context.
@@ -169,13 +194,17 @@ class BaseAgent:
         for key, value in context.items():
             placeholder = f"{{{key}}}"
             if isinstance(value, str):
+                value = self.truncate_text(value, 2000)  # Ensure context values aren't too large
                 template = template.replace(placeholder, value)
             elif isinstance(value, (list, dict)):
-                template = template.replace(placeholder, json.dumps(value, indent=2))
+                # Truncate JSON representations to prevent oversized headers
+                json_str = json.dumps(value, indent=None)[:1000]
+                template = template.replace(placeholder, json_str)
             else:
                 template = template.replace(placeholder, str(value))
         
-        return template
+        # Ensure final prompt isn't too large
+        return self.truncate_text(template, 4000)
     
     def execute_task(self, description: str = None, context: Dict[str, Any] = None) -> Any:
         """
@@ -193,7 +222,29 @@ class BaseAgent:
         elif not description:
             description = self.build_prompt()
         
+        # Ensure description isn't too large
+        description = self.truncate_text(description, 4000)
+        
         return self.agent.execute_task(
             description=description,
             expected_output=f"Results of {self.agent_type} for {self.crew_type}"
         )
+    
+    def truncate_text(self, text: str, max_length: int = None) -> str:
+        """
+        Truncate text to a maximum length to prevent large headers.
+        
+        Args:
+            text: Text to truncate
+            max_length: Maximum length (defaults to self.max_chunk_size)
+            
+        Returns:
+            Truncated text
+        """
+        if max_length is None:
+            max_length = self.max_chunk_size
+            
+        if not isinstance(text, str) or len(text) <= max_length:
+            return text
+            
+        return text[:max_length] + "..."

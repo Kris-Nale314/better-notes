@@ -5,7 +5,6 @@ from .base import BaseAgent
 class AggregatorAgent(BaseAgent):
     """
     Agent specialized in combining and deduplicating extraction results from multiple chunks.
-    Tracks mention frequency and preserves context where items appear.
     """
     
     def __init__(
@@ -13,7 +12,8 @@ class AggregatorAgent(BaseAgent):
         llm_client,
         crew_type: str,
         config: Optional[Dict[str, Any]] = None,
-        verbose: bool = True
+        verbose: bool = True,
+        max_chunk_size: int = 1500  # Add this parameter
     ):
         """
         Initialize an aggregator agent.
@@ -23,14 +23,18 @@ class AggregatorAgent(BaseAgent):
             crew_type: Type of crew (issues, actions, opportunities)
             config: Optional pre-loaded configuration
             verbose: Whether to enable verbose mode
+            max_chunk_size: Maximum size of text chunks to process
         """
         super().__init__(
             llm_client=llm_client,
             agent_type="aggregation",
             crew_type=crew_type,
             config=config,
-            verbose=verbose
+            verbose=verbose,
+            max_chunk_size=max_chunk_size  # Pass this parameter to BaseAgent
         )
+    
+    # Rest of the implementation...
     
     def aggregate_results(self, extraction_results: List[Dict[str, Any]], document_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """

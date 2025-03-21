@@ -18,7 +18,7 @@ class IssuesCrew:
     Coordinates multiple agents working together to produce comprehensive issue analysis.
     """
     
-    def __init__(self, llm_client, config_path=None, verbose=True):
+    def __init__(self, llm_client, config_path=None, verbose=True, max_chunk_size=1500):
         """
         Initialize the Issues Identification crew.
         
@@ -26,9 +26,11 @@ class IssuesCrew:
             llm_client: LLM client for agent communication
             config_path: Optional path to custom configuration
             verbose: Whether to enable verbose mode for agents and crew
+            max_chunk_size: Maximum size of text chunks to process
         """
         self.llm_client = llm_client
         self.verbose = verbose
+        self.max_chunk_size = max_chunk_size
         
         # Load configuration
         self.config = self._load_config(config_path)
@@ -38,28 +40,32 @@ class IssuesCrew:
             llm_client=llm_client,
             crew_type="issues",
             config=self.config,
-            verbose=verbose
+            verbose=verbose,
+            max_chunk_size=max_chunk_size
         )
         
         self.aggregator_agent = AggregatorAgent(
             llm_client=llm_client,
             crew_type="issues", 
             config=self.config,
-            verbose=verbose
+            verbose=verbose,
+            max_chunk_size=max_chunk_size
         )
         
         self.evaluator_agent = EvaluatorAgent(
             llm_client=llm_client,
             crew_type="issues",
             config=self.config,
-            verbose=verbose
+            verbose=verbose,
+            max_chunk_size=max_chunk_size
         )
         
         self.formatter_agent = FormatterAgent(
             llm_client=llm_client,
             crew_type="issues",
             config=self.config,
-            verbose=verbose
+            verbose=verbose,
+            max_chunk_size=max_chunk_size
         )
         
         # Create the crew
@@ -99,7 +105,7 @@ class IssuesCrew:
             logger.error(f"Error loading configuration from {config_path}: {e}")
             return {}
     
-    def process_document(self, document_chunks, document_info=None, user_preferences=None):
+    def process_document(self, document_chunks, document_info=None, user_preferences=None, max_chunk_size=None):
         """
         Process a document to identify issues.
         
@@ -107,10 +113,18 @@ class IssuesCrew:
             document_chunks: List of document chunks to analyze
             document_info: Optional document metadata
             user_preferences: Optional user preferences for analysis
+            max_chunk_size: Optional override for maximum chunk size
             
         Returns:
             Processed result with identified, evaluated, and formatted issues
         """
+        # Update max chunk size if provided
+        if max_chunk_size is not None:
+            self.max_chunk_size = max_chunk_size
+            # Update agents with new max chunk size
+            for agent in [self.extractor_agent, self.aggregator_agent, self.evaluator_agent, self.formatter_agent]:
+                agent.max_chunk_size = max_chunk_size
+        
         logger.info(f"Starting issues analysis with {len(document_chunks)} chunks")
         
         # Create extraction tasks for each chunk
@@ -148,13 +162,15 @@ class IssuesCrew:
         """
         tasks = []
         for i, chunk in enumerate(document_chunks):
+            # Ensure the chunk isn't too large
+            safe_chunk = self.extractor_agent.truncate_text(chunk, self.max_chunk_size)
+            
             task = Task(
-                description=f"Analyze document chunk {i+1}/{len(document_chunks)} to identify all potential issues:\n\n"
-                          f"CHUNK TEXT:\n{chunk}",
+                description=f"Analyze document chunk {i+1}/{len(document_chunks)} to identify issues:\n\n{safe_chunk}",
                 agent=self.extractor_agent.agent,
-                expected_output="A list of all potential issues found in the document chunk, "
-                               "with descriptions and context.",
-                output_file=f"extraction_result_{i}.json"  # Save intermediate results
+                expected_output="A list of issues found in the document chunk.",
+                async_execution=False,
+                output_file=f"extraction_result_{i}.json"
             )
             tasks.append(task)
         
@@ -170,11 +186,19 @@ class IssuesCrew:
         Returns:
             Aggregation task
         """
+        # Create a compact version of document info to prevent large headers
+        safe_doc_info = ""
+        if document_info:
+            try:
+                safe_doc_info = json.dumps(document_info, indent=None)[:500]
+            except:
+                safe_doc_info = str(document_info)[:500]
+        
         return Task(
-            description="Combine all identified issues from the extraction agents. "
-                      "Remove duplicates but track frequency of mentions. "
-                      "Create a consolidated list of unique issues that preserves context. "
-                      "Use the outputs from all extraction tasks.",
+            description=f"Combine all identified issues from the extraction agents. "
+                      f"Remove duplicates but track frequency of mentions. "
+                      f"Create a consolidated list of unique issues.\n\n"
+                      f"Document context: {safe_doc_info}",
             agent=self.aggregator_agent.agent,
             expected_output="A consolidated list of unique issues with frequency counts.",
             async_execution=False,
@@ -191,15 +215,15 @@ class IssuesCrew:
         Returns:
             Evaluation task
         """
-        # Extract criteria from config for prompt
+        # Extract criteria from config for prompt, but keep it compact
         criteria = self.config.get("evaluation", {}).get("criteria", {})
         criteria_text = ""
-        for level, description in criteria.items():
-            criteria_text += f"{level.upper()} issues are those that: {description}\n\n"
+        for level, description in list(criteria.items())[:2]:  # Limit to just a couple of examples
+            criteria_text += f"{level.upper()}: {description[:100]}...\n"
         
         return Task(
             description=f"Evaluate each issue and assign a severity level (critical, high, medium, or low).\n\n"
-                      f"Use these criteria for evaluation:\n{criteria_text}\n\n"
+                      f"Use these criteria as examples:\n{criteria_text}\n\n"
                       f"Use the output from the aggregation task as your input.",
             agent=self.evaluator_agent.agent,
             expected_output="The list of issues with severity levels assigned to each.",
@@ -218,21 +242,23 @@ class IssuesCrew:
         Returns:
             Formatting task
         """
-        # Get format template from config
-        format_template = self.config.get("formatting", {}).get("format_template", "")
-        
-        preferences_text = ""
+        # Create compact versions to prevent large headers
+        safe_preferences = ""
         if user_preferences:
-            preferences_text = f"\n\nUSER PREFERENCES:\n{json.dumps(user_preferences, indent=2)}"
+            try:
+                safe_preferences = json.dumps(user_preferences, indent=None)[:300]
+            except:
+                safe_preferences = str(user_preferences)[:300]
+        
+        format_template_preview = self.formatter_agent.get_format_template()[:500] + "..."
         
         return Task(
-            description=f"Format the evaluated issues into a structured report using this template:\n\n"
-                      f"{format_template}\n\n"
-                      f"DOCUMENT INFORMATION:\n{json.dumps(document_info or {}, indent=2)}"
-                      f"{preferences_text}\n\n"
+            description=f"Format the evaluated issues into a structured report.\n\n"
+                      f"USER PREFERENCES: {safe_preferences}\n\n"
+                      f"Follow this format template: {format_template_preview}\n\n"
                       f"Use the output from the evaluation task as your input.",
             agent=self.formatter_agent.agent,
-            expected_output="A fully formatted issues report according to the specified template.",
+            expected_output="A fully formatted issues report.",
             async_execution=False,
             output_file="final_issues_report.md"
         )

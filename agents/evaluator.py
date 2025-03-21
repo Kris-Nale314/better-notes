@@ -4,8 +4,7 @@ from .base import BaseAgent
 
 class EvaluatorAgent(BaseAgent):
     """
-    Agent specialized in evaluating the importance, severity, or impact
-    of identified items based on criteria in the configuration.
+    Agent specialized in evaluating the importance, severity, or impact of identified items.
     """
     
     def __init__(
@@ -13,7 +12,8 @@ class EvaluatorAgent(BaseAgent):
         llm_client,
         crew_type: str,
         config: Optional[Dict[str, Any]] = None,
-        verbose: bool = True
+        verbose: bool = True,
+        max_chunk_size: int = 1500  # Add this parameter
     ):
         """
         Initialize an evaluator agent.
@@ -23,14 +23,17 @@ class EvaluatorAgent(BaseAgent):
             crew_type: Type of crew (issues, actions, opportunities)
             config: Optional pre-loaded configuration
             verbose: Whether to enable verbose mode
+            max_chunk_size: Maximum size of text chunks to process
         """
         super().__init__(
             llm_client=llm_client,
             agent_type="evaluation",
             crew_type=crew_type,
             config=config,
-            verbose=verbose
+            verbose=verbose,
+            max_chunk_size=max_chunk_size  # Pass this parameter to BaseAgent
         )
+    
     
     def evaluate_items(self, aggregated_items: Dict[str, Any], document_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
