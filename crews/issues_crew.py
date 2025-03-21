@@ -1,4 +1,4 @@
-# crews/issues_crew.py
+# crews/issues_crew.py - updated to work with orchestrator LLM client
 from typing import Dict, Any, List, Optional
 from crewai import Crew, Task
 import os
@@ -18,19 +18,28 @@ class IssuesCrew:
     Coordinates multiple agents working together to produce comprehensive issue analysis.
     """
     
-    def __init__(self, llm_client, config_path=None, verbose=True, max_chunk_size=1500):
+    def __init__(
+        self, 
+        llm_client, 
+        config_path=None, 
+        verbose=True, 
+        max_chunk_size=1500,
+        max_rpm=10
+    ):
         """
         Initialize the Issues Identification crew.
         
         Args:
-            llm_client: LLM client for agent communication
+            llm_client: LLM client from orchestrator
             config_path: Optional path to custom configuration
             verbose: Whether to enable verbose mode for agents and crew
             max_chunk_size: Maximum size of text chunks to process
+            max_rpm: Maximum requests per minute for API rate limiting
         """
         self.llm_client = llm_client
         self.verbose = verbose
         self.max_chunk_size = max_chunk_size
+        self.max_rpm = max_rpm
         
         # Load configuration
         self.config = self._load_config(config_path)
@@ -41,7 +50,8 @@ class IssuesCrew:
             crew_type="issues",
             config=self.config,
             verbose=verbose,
-            max_chunk_size=max_chunk_size
+            max_chunk_size=max_chunk_size,
+            max_rpm=max_rpm
         )
         
         self.aggregator_agent = AggregatorAgent(
@@ -49,7 +59,8 @@ class IssuesCrew:
             crew_type="issues", 
             config=self.config,
             verbose=verbose,
-            max_chunk_size=max_chunk_size
+            max_chunk_size=max_chunk_size,
+            max_rpm=max_rpm
         )
         
         self.evaluator_agent = EvaluatorAgent(
@@ -57,7 +68,8 @@ class IssuesCrew:
             crew_type="issues",
             config=self.config,
             verbose=verbose,
-            max_chunk_size=max_chunk_size
+            max_chunk_size=max_chunk_size,
+            max_rpm=max_rpm
         )
         
         self.formatter_agent = FormatterAgent(
@@ -65,7 +77,8 @@ class IssuesCrew:
             crew_type="issues",
             config=self.config,
             verbose=verbose,
-            max_chunk_size=max_chunk_size
+            max_chunk_size=max_chunk_size,
+            max_rpm=max_rpm
         )
         
         # Create the crew
@@ -79,6 +92,23 @@ class IssuesCrew:
             tasks=[],  # Will be created for each document
             verbose=verbose
         )
+    
+    # Add method to update RPM settings
+    def update_rpm(self, new_rpm: int) -> None:
+        """
+        Update the maximum requests per minute for all agents.
+        
+        Args:
+            new_rpm: New maximum requests per minute
+        """
+        self.max_rpm = new_rpm
+        
+        # Update all agents
+        for agent_type in ["extractor", "aggregator", "evaluator", "formatter"]:
+            agent = getattr(self, f"{agent_type}_agent")
+            if hasattr(agent, "agent") and hasattr(agent.agent, "max_rpm"):
+                agent.agent.max_rpm = new_rpm
+    
     
     def _load_config(self, config_path=None):
         """

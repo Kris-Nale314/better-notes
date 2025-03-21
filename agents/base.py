@@ -1,5 +1,5 @@
-# agents/base.py
-from typing import Dict, Any, Optional, List
+# agents/base.py - updated to work with orchestrator LLM client
+from typing import Dict, Any, Optional
 from crewai import Agent
 import os
 import json
@@ -21,24 +21,27 @@ class BaseAgent:
         crew_type: str,
         config: Optional[Dict[str, Any]] = None,
         verbose: bool = True,
-        max_chunk_size: int = 1500
+        max_chunk_size: int = 1500,
+        max_rpm: int = 10
     ):
         """
         Initialize a base agent with optimizations for large document handling.
         
         Args:
-            llm_client: LLM client for agent communication
+            llm_client: LLM client from orchestrator
             agent_type: Type of agent (extraction, aggregation, evaluation, formatting)
             crew_type: Type of crew (issues, actions, opportunities)
             config: Optional pre-loaded configuration
             verbose: Whether to enable verbose mode
             max_chunk_size: Maximum size of text chunks to process
+            max_rpm: Maximum requests per minute for API rate limiting
         """
         self.llm_client = llm_client
         self.agent_type = agent_type
         self.crew_type = crew_type
         self.verbose = verbose
         self.max_chunk_size = max_chunk_size
+        self.max_rpm = max_rpm
         
         # Load or use provided config
         self.config = config if config else self.load_config(crew_type)
@@ -62,12 +65,12 @@ class BaseAgent:
             llm=llm_client,
             # Add specific settings to help with large contexts
             max_iterations=2,
-            max_rpm=10,
+            max_rpm=max_rpm, 
             llm_config={
                 "max_tokens": 600
             }
         )
-    
+        
     def load_config(self, crew_type: str) -> Dict[str, Any]:
         """
         Load a configuration file for the specified crew type.

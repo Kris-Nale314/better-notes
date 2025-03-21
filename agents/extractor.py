@@ -13,7 +13,8 @@ class ExtractorAgent(BaseAgent):
         crew_type: str,
         config: Optional[Dict[str, Any]] = None,
         verbose: bool = True,
-        max_chunk_size: int = 1500  # Add this parameter
+        max_chunk_size: int = 1500,  # Add this parameter
+        max_rpm: int = 10
     ):
         """
         Initialize an extractor agent.
@@ -31,7 +32,8 @@ class ExtractorAgent(BaseAgent):
             crew_type=crew_type,
             config=config,
             verbose=verbose,
-            max_chunk_size=max_chunk_size  # Pass this parameter to BaseAgent
+            max_chunk_size=max_chunk_size,  # Pass this parameter to BaseAgent
+            max_rpm = max_rpm
         )
     
     def extract_from_chunk(self, chunk: str, document_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

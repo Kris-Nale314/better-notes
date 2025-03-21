@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center">Better Notes</h1>
-<p align="center"><strong>AI-powered document analysis assistant built with agent-based architecture</strong></p>
+<p align="center"><strong>AI-powered document analysis with multi-agent collaboration</strong></p>
 
 <p align="center">
   <a href="#"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
@@ -11,103 +11,131 @@
   <a href="#"><img src="https://img.shields.io/badge/status-beta-orange" alt="Development Status"></a>
 </p>
 
-## Why Agent-Based Analysis Matters in Document Processing
+## Intelligent Document Analysis
 
-Traditional document processors treat analysis as a single-pass operation, leading to:
+Better Notes transforms complex documents into structured insights using a unique combination of specialized AI agents working in collaboration. Unlike traditional document processing, our multi-agent approach delivers deeper, more nuanced analysis that scales to documents of any size.
 
-- **Depth limitations** when complex topics need specialized attention
-- **Context isolation** when insights are processed independently
-- **Quality ceilings** when one model tackles multi-faceted problems
+### What Makes Better Notes Different?
 
-Better Notes addresses these issues through multi-agent teams:
+Most AI document tools pass text through a single model. Better Notes breaks analysis into specialized tasks, each handled by an AI expert. Just as human teams outperform individuals through specialization, our agent teams deliver superior results through focused expertise.
 
-- **Specialized agents** focus on their domain of expertise
-- **Collaborative processing** enhances output quality
-- **Parallel execution** scales to very large documents
-- **Iterative refinement** responds to user feedback
-
-## Key Capabilities
+## Key Analysis Types
 
 <table>
 <tr>
-<td width="50%">
+<td width="33%">
 
-### Smart Document Analysis
-- Structure-aware document processing
-- Meeting transcript specialization
-- Parallel chunk processing
-- Hierarchical synthesis
+### 📝 Document Summarization
+
+Smart document summarization with rich, hierarchical structuring that preserves the original document's meaning and organization.
 
 </td>
-<td width="50%">
+<td width="33%">
 
-### Specialized Agent Teams
-- Issues identification crew
-- Action items extraction crew
-- Opportunities discovery crew
-- Insight synthesis team
+### 🔍 Issues Identification
+
+Expert analysis that discovers problems, challenges, and risks, then evaluates their criticality and impact.
 
 </td>
-</tr>
-<tr>
-<td colspan="2" align="center">
-<img src="https://via.placeholder.com/800x400?text=Better+Notes+Architecture" alt="Better Notes Architecture" width="80%"/>
+<td width="33%">
+
+### ✅ Action Item Extraction
+
+Identifies tasks, commitments, and follow-ups with ownership assignment and deadline tracking.
+
 </td>
 </tr>
 </table>
+
+## Multi-Agent Architecture
+
+<p align="center">
+  <img src="https://via.placeholder.com/800x300?text=Agent+Collaboration+Architecture" alt="Agent Collaboration Architecture" width="90%"/>
+</p>
+
+Better Notes uses a team of specialized AI agents for each analysis type:
+
+1. **Extractor Agents** analyze document chunks in parallel to identify specific elements
+2. **Aggregator Agent** combines and deduplicates findings, tracking mention frequency
+3. **Evaluator Agent** assesses importance, severity, and relevance using defined criteria
+4. **Formatter Agent** transforms raw data into structured, visually rich reports
+
+This collaborative approach delivers higher quality results while handling documents of any size.
 
 ## File Structure
 
 ```
 better-notes/
-├── agents/
+├── agents/                    # Agent implementations
 │   ├── __init__.py
-│   ├── base.py                # Base agent setup with common functionality
-│   ├── extractor.py           # Generic extraction agent
-│   ├── aggregator.py          # Generic aggregation agent
-│   ├── evaluator.py           # Generic evaluation agent
-│   ├── formatter.py           # Generic formatting agent
-│   ├── utils/
+│   ├── base.py                # Base agent with shared functionality
+│   ├── extractor.py           # Extraction specialist agent
+│   ├── aggregator.py          # Aggregation specialist agent
+│   ├── evaluator.py           # Evaluation specialist agent
+│   ├── formatter.py           # Formatting specialist agent
+│   ├── utils/                 # Agent utilities
 │   │   └── __init__.py
-│   └── config/    
-│       └── issues_config.json # Issues identification config
-│       └── action_config.json # Action items config
-│       └── opp_config.json    # Opportunities config
-├── crews/
+│   └── config/                # Analysis configurations
+│       ├── issues_config.json # Issues analysis configuration
+│       ├── action_config.json # Action items configuration
+│       └── opp_config.json    # Opportunities configuration
+├── crews/                     # Agent teams (crews)
 │   ├── __init__.py
 │   ├── issues_crew.py         # Issues identification crew
 │   ├── action_crew.py         # Action items crew
-│   └── opp_crew.py            # Opportunities crew
-├── lean/
+│   └── insights_crew.py       # Context insights crew
+├── lean/                      # Core document processing
 │   ├── __init__.py
-│   ├── async_openai_adapter.py
-│   ├── chunker.py
-│   ├── document.py
-│   ├── options.py
-│   └── synthesizer.py
-├── pages/
-│   ├── 01_Summary.py          # Original summary page
-│   └── 02_Multi_Agent.py      # Generic multi-agent page
-├── ui_utils/
+│   ├── async_openai_adapter.py# LLM communication layer
+│   ├── chunker.py             # Document chunking
+│   ├── document.py            # Document analysis
+│   ├── options.py             # Processing options
+│   ├── summarizer.py          # Chunk summarization
+│   └── synthesizer.py         # Summary synthesis
+├── ui_utils/                  # UI enhancement utilities
 │   ├── __init__.py
-│   └── refiner.py
-├── app.py                     # Main entry point
-├── orchestrator.py            # Multi-crew coordinator
+│   ├── refiner.py             # Output refinement
+│   └── ui_enhance.py          # UI styling and visualization
+├── pages/                     # Streamlit pages
+│   ├── 01_Summary.py          # Document summarization
+│   └── 02_Multi_Agent.py      # Multi-agent analysis
+├── outputs/                   # Generated analysis outputs
+├── app.py                     # Main Streamlit application
+├── orchestrator.py            # Unified processing orchestrator
 └── README.md
 ```
 
-## How It Works
+## Under the Hood
 
-Better Notes transforms document analysis through crew-based processing:
+### Document Processing
 
-1. **Document Chunking**: Intelligently segments documents based on structure
-2. **Agent Specialization**: Each agent focuses on a specific aspect of analysis
-3. **Parallel Processing**: Multiple agents work simultaneously on different chunks
-4. **Insight Aggregation**: Results are combined, deduplicated, and organized
-5. **Quality Evaluation**: Outputs are assessed for severity, impact, and relevance
-6. **Presentation Formatting**: Findings are structured into clear, actionable formats
+Document processing flows through an intelligent pipeline:
 
-## Quick Start
+1. **Initial Analysis**: Extracts document type, tone, and key information
+2. **Smart Chunking**: Divides documents based on structure and semantic boundaries
+3. **Parallel Processing**: Processes chunks simultaneously for efficiency
+4. **Hierarchical Synthesis**: Combines insights while preserving document structure
+
+### Agent Collaboration
+
+Each analysis type uses a specialized crew of agents:
+
+1. **Extraction Phase**: Multiple agents analyze document chunks in parallel
+2. **Aggregation Phase**: Findings are combined, deduplicated, and organized
+3. **Evaluation Phase**: Results are assessed for importance, severity, and relevance
+4. **Formatting Phase**: Insights are transformed into structured, visual reports
+
+### Integration Architecture
+
+The `orchestrator.py` provides a unified interface that:
+
+- Creates consistent LLM clients for all components
+- Manages document chunking and distribution
+- Coordinates agent crews for specialized analysis
+- Supports both traditional summarization and multi-agent workflows
+- Controls resource usage and API rate limits
+
+## Getting Started
 
 ```bash
 # Clone the repository
@@ -131,17 +159,10 @@ streamlit run app.py
 
 ## Example Use Cases
 
-- **Meeting Transcript Analysis**: Convert lengthy meeting transcripts into structured notes with issues, actions, and opportunities
-- **Research Document Processing**: Extract key findings and potential research directions from academic papers
-- **Business Report Evaluation**: Identify critical issues and strategic opportunities from quarterly reports
-- **Project Documentation Review**: Extract action items and potential problems from project documentation
-
-## Dependencies
-
-- CrewAI: Multi-agent orchestration framework
-- OpenAI API: Large language model access
-- Streamlit: Web interface
-- AsyncIO: Parallel processing support
+- **Meeting Transcript Analysis**: Convert lengthy meeting transcripts into structured notes
+- **Research Document Processing**: Extract key findings and potential research directions
+- **Business Report Evaluation**: Identify critical issues and strategic opportunities
+- **Project Documentation Review**: Extract action items and potential problems
 
 ## License
 
@@ -150,6 +171,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 <p align="center">
-<strong>Better notes through better agents.</strong><br>
-Divide, conquer, and synthesize your documents through collaborative AI.
+<strong>Transform documents into actionable insights</strong><br>
+Better Notes: The power of collaborative AI for document understanding
 </p>

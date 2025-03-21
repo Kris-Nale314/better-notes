@@ -10,6 +10,7 @@ from pathlib import Path
 import tempfile
 import json
 import datetime
+from orchestrator import OrchestratorFactory
 
 from lean.options import ProcessingOptions
 from orchestrator import Orchestrator
@@ -291,6 +292,8 @@ if st.session_state.selected_analysis:
         if not api_key:
             st.error("OpenAI API key not found! Please set the OPENAI_API_KEY environment variable.")
             return
+        # In the process_document function in 02_Multi_Agent.py, update the orchestrator creation:
+        OrchestratorFactory()
         
         # Set up progress tracking
         progress_container = st.container()
@@ -363,11 +366,13 @@ if st.session_state.selected_analysis:
                 "Comprehensive": "comprehensive"
             }
             
-            # Create orchestrator with RPM setting
-            orchestrator = Orchestrator(
-                llm_client=llm_client, 
+            # Create orchestrator using the factory instead of direct initialization
+            orchestrator = OrchestratorFactory.create_orchestrator(
+                model=selected_model,
+                temperature=temperature,
+                max_chunk_size=max_chunk_size,
                 verbose=show_agent_details,
-                max_chunk_size=max_chunk_size
+                max_rpm=max_rpm
             )
             
             # Update RPM setting in all agents
