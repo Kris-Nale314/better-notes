@@ -42,10 +42,8 @@
 </table>
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logic.svg" alt="Better-Notes Logic" width="90%"/>
-
+  <img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logic.svg" alt="Better-Notes Logic" width="80%"/>
   <em>The Planner Agent creates a tailored approach for each document, coordinating specialized agents that extract, process, and organize information</em>
-
 </div>
 
 ## 📊 Features In Action
@@ -91,12 +89,12 @@ Better Notes implements four foundational patterns that elevate AI applications:
 ### Agent Pipeline Flow
 
 ```
-flow 
+flow
     A[Document Upload] --> B[Macro-Chunking]
     B --> C[Planner Agent]
     C -- Creates tailored instructions --> D
     
-    D[Agent Crew]
+    subgraph D[Agent Crew]
     D1[Extractor] --> D2[Aggregator]
     D2 --> D3[Evaluator]
     D3 --> D4[Formatter]
@@ -105,7 +103,7 @@ flow
     D --> E[Analysis Report]
     E --> F[Post-Analysis Features]
     
-    F[Post-Analysis Features]
+    subgraph F[Post-Analysis Features]
     F1[Document Chat] 
     F2[Reanalysis Options]
     F3[Technical Insights]
