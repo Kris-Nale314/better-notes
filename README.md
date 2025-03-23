@@ -1,80 +1,85 @@
-
-</td>
-</tr>
+<table>
 <tr>
-<td colspan="2" align="center">
+<td>
 <img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logo.svg" alt="Better-Notes logo" width="30%"/>
-</td>
-</tr>
-</table>
-#  Better-Notes
-## Multi-Agent Document Analysis
 
-> Transform meeting transcripts and long documents into structured insights using AI agents that collaborate, reason, and adapt.
+# Better-Notes
+## Agentic Document Analysis for Meaningful Insights
 
-## 📝 Overview
+> Transform documents and meeting transcripts into structured insights using a team of specialized AI agents that collaborate, reason, and adapt.
 
+## 🧠 What Makes This Different
 
-**Better Notes** is a modular, multi-agent system for analyzing documents up to 100k tokens to extract insights, identify issues, and organize information. Unlike basic summarizers, it uses specialized AI agents orchestrated by a Planner to create deeper, more structured analysis.
+**Better Notes** isn't just another summarizer. It's a modular, multi-agent system that works together like a team of specialists to analyze documents and deliver insights you can actually use:
 
-Think of it as a team of AI analysts working together on your document:
-- The **Planner** designs a document-specific analysis strategy
-- Five **Specialized Agents** execute different parts of the analysis
-- The processing runs on **macro-chunks** (10k tokens each) for scale
+- **Specialized Agents**: Each agent is optimized for a specific task (extraction, aggregation, evaluation, formatting, review)
+- **Macro-Chunking**: Handles documents up to 100k tokens by processing in 10k-token macro-chunks (very different from RAG's tiny chunks)
+- **Metadata Layering**: Each agent adds and refines metadata, creating progressively richer analysis
+- **Planning Capability**: The Planner agent acts as a "meta-agent" that optimizes the analysis approach for each document
+- **JSON-Configurable Crews**: Different analysis teams defined through configuration rather than code changes
 
 ```
-    A[Document Upload] --> B[Macro-Chunking (10k tokens)]
+    A[Document Upload] --> B[Macro-Chunking]
+
     B --> C[Planner Agent]
-    C --> D1[Extractor Agent]
-    D1 --> D2[Aggregator Agent]
-    D2 --> D3[Evaluator Agent]
-    D3 --> D4[Formatter Agent]
-    D4 --> E[🧪 Reviewer Agent (Optional)]
-    E --> F[Final Report + Metadata + Chat]
-
+    C -- Creates tailored instructions --> D
+    
+    D[Agent Crew]
+    D1[Extractor] --> D2[Aggregator]
+    D2 --> D3[Evaluator]
+    D3 --> D4[Formatter]
+    D4 --> D5[Reviewer]
+    
+    D --> E[Analysis + Chat]
 ```
 
-## 🧠 Key Concepts
+## 📊 Features In Action
 
-### Four Essential Patterns of Agentic AI
+- **Issues Analysis**: Identify problems, challenges, and risks categorized by severity
+- **Progressive Metadata**: Each agent adds layers of understanding (mentions, confidence, impact)
+- **Post-Analysis Chat**: Ask questions about the document with full context from the analysis
+- **Reanalysis & Refinement**: Adjust parameters and focus areas to refine insights
+- **Focus Customization**: Target analysis on specific areas (Technical, Process, Resource, etc.)
 
-Better Notes implements four foundational patterns that level up AI applications:
+## 🧩 The Architecture
+
+Better Notes implements four foundational patterns that elevate AI applications:
 
 | Pattern | What It Means | How Better Notes Uses It |
 |---------|---------------|--------------------------|
-| **Reflection** | AI that assesses its own outputs | Reviewer agent scores analysis quality across multiple dimensions |
+| **Reflection** | AI assessing its own outputs | Reviewer agent scores analysis quality across multiple dimensions |
 | **Tool Use** | AI invoking external capabilities | Agents access configs, document metadata, and processing services |
 | **Planning** | AI creating step-by-step strategies | Planner agent designs document-specific instructions for other agents |
 | **Collaboration** | Specialized AIs working together | The entire pipeline divides complex analysis into specialized expert tasks |
 
-### 📚 Macro-Chunking for Long Documents
-
-- Processes 50k-100k token documents by dividing them into 10k-token macro-chunks
-- Parallel extraction with async processing for speed
-- Entirely different approach from RAG's tiny retrievable snippets
-
-### 🧩 Modular Multi-Agent Architecture
-
-- `BaseAgent` provides the foundation for all agents
-- `PlannerAgent` creates document-specific instructions
-- Specialized agents like `ExtractorAgent` focus on single tasks
-- Configurable through JSON files, no code changes needed
-
-</td>
-</tr>
-<tr>
-<td colspan="2" align="center">
 <img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logic.svg" alt="Better-Notes Logic" width="80%"/>
-</td>
-</tr>
-</table>
 
+## 🔄 The Agent Crew System
 
-## 💡 Analysis Types
+Assessment Crews are specialized teams of AI agents that work together through a structured, configurable workflow:
 
-- **Issues Identification**: Find problems, challenges, and risks
-- **Action Items** (Coming soon): Extract tasks, assignments, and follow-ups
-- **Meeting Insights** (Coming soon): Analyze participants, decisions, and sentiment
+1. **Planner Agent** determines the optimal approach given the document and user preferences
+2. **Extractor Agent** identifies relevant information from each document chunk
+3. **Aggregator Agent** combines findings, eliminates duplicates, and enhances metadata
+4. **Evaluator Agent** assesses importance, priority, and relationships
+5. **Formatter Agent** creates structured, navigable reports
+6. **Reviewer Agent** performs quality assessment across multiple dimensions
+
+Each crew is defined through a JSON configuration file that specifies agent roles, instructions, and outputs:
+
+```json
+{
+  "agents": {
+    "extraction": {
+      "role": "Issue Extractor",
+      "goal": "Identify all potential issues in document chunks",
+      "instructions": "Analyze the document chunk to identify issues...",
+      "output_format": {...}
+    },
+    // Other agent definitions
+  }
+}
+```
 
 ## 🚀 Getting Started
 
@@ -96,7 +101,7 @@ better-notes/
 ├── orchestrator.py             # Coordinates agent crews
 ├── agents/
 │   ├── base.py                 # BaseAgent foundation
-│   ├── planner.py              # Master planning agent
+│   ├── planner.py              # Meta-planning agent
 │   ├── extractor.py            # Extracts from chunks
 │   ├── aggregator.py           # Combines chunk results
 │   ├── evaluator.py            # Assesses importance
@@ -110,25 +115,27 @@ better-notes/
 ├── lean/
 │   ├── chunker.py              # Macro-chunking logic
 │   ├── async_openai_adapter.py # LLM interface
+├── ui_utils/
+│   ├── core_styling.py         # UI styling
+│   ├── progress_tracking.py    # Progress visualization
+│   ├── result_formatting.py    # Output enhancement
+│   └── chat_interface.py       # Post-analysis chat
 ├── pages/
 │   ├── 01_Summary.py           # Document summary page
 │   ├── 02_Assess_Issues.py     # Issues analysis page
 ```
 
-## 🧠 Why It Matters
+## 🔍 Why It's Interesting
 
-Better Notes demonstrates how AI agents can:
+Better Notes demonstrates practical applications of several emerging techniques in AI:
 
-1. **Divide complex problems** into more manageable chunks
-2. **Use metadata to enhance quality** at each stage
-3. **Adapt to document context** using planning
-4. **Process longer content** than standard prompting
+1. **Agent Specialization**: Different agents optimized for specific subtasks
+2. **Planning Layers**: Meta-agents that coordinate and optimize other agents
+3. **Metadata Enhancement**: Progressive enrichment of content through the pipeline
+4. **Crew-Based Architecture**: Configurable teams of agents with defined workflows
+5. **UI/UX for Agent Systems**: Clean visualization of complex agent processes
 
-It's perfect for building:
-- Meeting assistants that understand context
-- Document analysis systems that find what matters
-- Compliance analyzers that identify risks
-- Strategic advisors that organize information
+It's an experimental project that helps to understand how modular AI systems can be built to evolve and adapt to more complex tasks.
 
 ## 📝 Development Status
 
@@ -141,8 +148,12 @@ It's perfect for building:
 
 ## 🤝 Contribution
 
-Contributions welcome! Check out [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions welcome! 
 
 ## 📃 License
 
 [MIT License](LICENSE)
+</td>
+</tr>
+</table>
+```

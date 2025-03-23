@@ -17,14 +17,11 @@ from typing import Dict, Any, Optional, List
 # Import orchestrator
 from orchestrator import OrchestratorFactory
 
-# Import UI enhancements
-from ui_utils.ui_enhance import (
-    apply_custom_css, 
-    enhance_result_display, 
-    format_log_entries, 
-    render_agent_card, 
-    display_chat_interface
-)
+# Import UI utilities
+from ui_utils.core_styling import apply_component_styles, apply_analysis_styles
+from ui_utils.result_formatting import enhance_result_display, create_download_button
+from ui_utils.chat_interface import display_chat_interface
+from ui_utils.progress_tracking import ProgressTracker, log_progress
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -37,8 +34,9 @@ st.set_page_config(
     layout="wide"
 )
 
-# Apply custom CSS
-apply_custom_css()
+# Apply styling
+apply_component_styles()
+apply_analysis_styles("issues")
 
 # Setup output directory
 OUTPUT_DIR = Path("outputs")
@@ -54,19 +52,17 @@ if "processing_time" not in st.session_state:
     st.session_state.processing_time = 0
 if "agent_logs" not in st.session_state:
     st.session_state.agent_logs = []
-if "agent_statuses" not in st.session_state:
-    st.session_state.agent_statuses = {
-        "planner": "waiting",
-        "extractor": "waiting",
-        "aggregator": "waiting",
-        "evaluator": "waiting",
-        "formatter": "waiting",
-        "reviewer": "waiting"
-    }
 if "document_info" not in st.session_state:
     st.session_state.document_info = None
 if "document_text" not in st.session_state:
     st.session_state.document_text = ""
+
+# Main title and description
+st.title("⚠️ Issues Identification")
+st.markdown("""
+This tool analyzes documents to identify issues, problems, risks, and challenges.
+It uses a team of specialized AI agents coordinated by a Planner agent to extract, evaluate, and organize issues by severity.
+""")
 
 # Sidebar configuration
 st.sidebar.header("Analysis Settings")
@@ -124,14 +120,6 @@ with st.sidebar.expander("Advanced Settings"):
         value=True,
         help="Final quality check of the analysis before delivery"
     )
-
-# Main content
-st.title("⚠️ Issues Identification")
-
-st.markdown("""
-This tool analyzes documents to identify issues, problems, risks, and challenges.
-It uses a team of specialized AI agents coordinated by a Planner agent to extract, evaluate, and organize issues by severity.
-""")
 
 # Document upload
 st.header("Upload Document")
@@ -229,76 +217,136 @@ def process_document():
         st.error("OpenAI API key not found! Please set the OPENAI_API_KEY environment variable.")
         return
     
-    # Set up progress tracking
-    progress_container = st.container()
-    progress_bar = progress_container.progress(0)
-    status_text = progress_container.empty()
+    # Create a single progress display area using placeholders
+    # This is key - using placeholders that we can update in place
+    progress_placeholder = st.empty()
+    status_text_placeholder = st.empty()
     
-    # Agent status displays
-    agent_status_container = st.container()
-    
-    # Set up agent displays
-    agent_types = ["planner", "extractor", "aggregator", "evaluator", "formatter"]
+    # Create stage indicators using columns and placeholders
+    stages = ["Planning", "Extraction", "Aggregation", "Evaluation", "Formatting"]
     if enable_reviewer:
-        agent_types.append("reviewer")
+        stages.append("Review")
     
-    agent_displays = agent_status_container.columns(len(agent_types))
+    stage_cols = st.columns(len(stages))
+    stage_indicators = []
     
-    # Initialize agent status components
-    agent_status_components = {}
-    for i, agent_type in enumerate(agent_types):
-        agent_status_components[agent_type] = agent_displays[i].empty()
+    for i, stage in enumerate(stages):
+        with stage_cols[i]:
+            # Use placeholders for each stage indicator
+            stage_indicators.append({
+                "name": stage,
+                "placeholder": st.empty(),
+                "status": "waiting"
+            })
+            
+            # Set initial waiting state
+            stage_indicators[i]["placeholder"].markdown(f"""
+                <div style="text-align: center;">
+                    <div style="font-size: 1.5rem;">⏳</div>
+                    <div style="font-weight: 500;">{stage}</div>
+                    <div style="font-size: 0.8rem;">Waiting</div>
+                </div>
+            """, unsafe_allow_html=True)
     
-    # Initial render of agent cards
-    for agent_type, component in agent_status_components.items():
-        render_agent_card(agent_type, "waiting", component)
-    
-    # Agent logs container
+    # Log container (if enabled)
+    log_placeholder = None
     if show_agent_details:
-        log_container = st.container()
-        log_box = log_container.empty()
+        log_placeholder = st.empty()
         st.session_state.agent_logs = []
     
+    # Track overall progress
+    progress_value = 0.0
     start_time = time.time()
     
-    # Progress callback
+    # Progress callback that updates placeholders
     def update_progress(progress, message):
-        """Update progress bar, status text, and agent statuses."""
-        progress_bar.progress(progress)
-        status_text.text(message)
+        """Update progress indicators in place."""
+        nonlocal progress_value
+        progress_value = progress
         
-        # Add to agent logs
-        if show_agent_details:
-            timestamp = time.strftime("%H:%M:%S")
-            log_entry = f"[{timestamp}] {message}"
-            st.session_state.agent_logs.append(log_entry)
-            log_html = format_log_entries(st.session_state.agent_logs)
-            log_box.markdown(log_html, unsafe_allow_html=True)
+        # Update progress bar
+        progress_placeholder.progress(progress)
         
-        # Update agent statuses based on progress messages
-        if "Creating" in message and "plan" in message.lower():
-            update_agent_status("planner", "working", agent_status_components)
-        elif "Planning complete" in message:
-            update_agent_status("planner", "complete", agent_status_components)
-        elif "Extracting" in message or "extraction" in message.lower():
-            update_agent_status("extractor", "working", agent_status_components)
-        elif "Aggregating" in message or "aggregation" in message.lower():
-            update_agent_status("extractor", "complete", agent_status_components)
-            update_agent_status("aggregator", "working", agent_status_components)
-        elif "Evaluating" in message or "evaluation" in message.lower():
-            update_agent_status("aggregator", "complete", agent_status_components)
-            update_agent_status("evaluator", "working", agent_status_components)
-        elif "Formatting" in message or "formatting" in message.lower():
-            update_agent_status("evaluator", "complete", agent_status_components)
-            update_agent_status("formatter", "working", agent_status_components)
-        elif "Reviewing" in message or "review" in message.lower():
-            update_agent_status("formatter", "complete", agent_status_components)
-            if enable_reviewer:
-                update_agent_status("reviewer", "working", agent_status_components)
-        elif "complete" in message.lower():
-            update_agent_status("formatter", "complete", agent_status_components)
-            if enable_reviewer:
-                update_agent_status("reviewer", "complete", agent_status_components)
+        # Filter out chunk-level messages
+        is_chunk_message = any(term in message.lower() for term in 
+                              ['chunk', 'processing chunk', 'extracting from chunk'])
+        
+        # Only update status text for high-level messages
+        if not is_chunk_message:
+            status_text_placeholder.text(message)
+        
+        # Update agent status based on progress
+        current_stage = None
+        if progress <= 0.15:
+            current_stage = "Planning"
+        elif progress <= 0.55:
+            current_stage = "Extraction"
+        elif progress <= 0.65:
+            current_stage = "Aggregation"
+        elif progress <= 0.75:
+            current_stage = "Evaluation"
+        elif progress <= 0.85:
+            current_stage = "Formatting"
+        elif progress <= 1.0 and enable_reviewer:
+            current_stage = "Review"
+        
+        # Update stage indicators
+        for i, indicator in enumerate(stage_indicators):
+            stage = indicator["name"]
+            status = indicator["status"]
+            new_status = "waiting"
+            
+            # Determine new status
+            if stage == current_stage:
+                new_status = "working"
+            elif stages.index(stage) < stages.index(current_stage):
+                new_status = "complete"
+                
+            # Only update if status changed
+            if new_status != status:
+                stage_indicators[i]["status"] = new_status
+                
+                # Determine icon and color
+                if new_status == "complete":
+                    icon = "✅"
+                    color = "#20c997"
+                elif new_status == "working":
+                    icon = "🔄"
+                    color = "#ff9f43"
+                else:
+                    icon = "⏳"
+                    color = "#6c757d"
+                
+                # Update the placeholder with new status
+                indicator["placeholder"].markdown(f"""
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.5rem;">{icon}</div>
+                        <div style="font-weight: 500; color: {color};">{stage}</div>
+                        <div style="font-size: 0.8rem;">{new_status.capitalize()}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+        
+        # Add to logs if detailed logging is enabled
+        if show_agent_details and log_placeholder:
+            if not is_chunk_message or log_placeholder is None:
+                # Add the log entry
+                timestamp = time.strftime("%H:%M:%S")
+                log_entry = f"[{timestamp}] {message}"
+                st.session_state.agent_logs.append(log_entry)
+                
+                # Format logs
+                log_html = []
+                for entry in st.session_state.agent_logs[-20:]:  # Show last 20 logs
+                    entry_class = "log-entry"
+                    if "error" in entry.lower() or "failed" in entry.lower():
+                        entry_class += " status-error"
+                    elif "complete" in entry.lower() or "success" in entry.lower():
+                        entry_class += " status-complete"
+                        
+                    log_html.append(f'<div class="{entry_class}">{entry}</div>')
+                
+                # Update the log placeholder
+                log_placeholder.markdown("\n".join(log_html), unsafe_allow_html=True)
     
     try:
         # Calculate max_chunk_size based on document length and number of chunks
@@ -350,7 +398,6 @@ def process_document():
         }
         
         # Process document
-        update_progress(0.05, "Starting document analysis...")
         result = orchestrator.process_document(
             document_text,
             options=options,
@@ -358,8 +405,10 @@ def process_document():
         )
         
         # Store document info for chat
-        if "issues" in result and isinstance(result["issues"], dict) and "document_info" in result["issues"].get("_metadata", {}):
-            st.session_state.document_info = result["issues"]["_metadata"]["document_info"]
+        if "issues" in result and isinstance(result["issues"], dict) and "_metadata" in result["issues"]:
+            metadata = result["issues"]["_metadata"]
+            if "document_info" in metadata:
+                st.session_state.document_info = metadata["document_info"]
         
         # Store results
         if "issues" in result:
@@ -370,16 +419,24 @@ def process_document():
         st.session_state.processing_complete = True
         st.session_state.processing_time = time.time() - start_time
         
-        # Clear progress indicators
-        progress_bar.empty()
-        status_text.text("Processing complete!")
+        # Clear progress display
+        progress_placeholder.empty()
+        status_text_placeholder.empty()
+        for indicator in stage_indicators:
+            indicator["placeholder"].empty()
+        if log_placeholder:
+            log_placeholder.empty()
         
         # Display results
         display_results(st.session_state.agent_result, st.session_state.processing_time)
         
     except Exception as e:
         # Display error
-        progress_container.empty()
+        progress_placeholder.empty()
+        status_text_placeholder.empty()
+        for indicator in stage_indicators:
+            indicator["placeholder"].empty()
+        
         st.error(f"Error processing document: {str(e)}")
         
         with st.expander("Technical Error Details"):
@@ -387,12 +444,6 @@ def process_document():
         
         st.session_state.processing_complete = False
         st.session_state.agent_result = {"error": str(e)}
-
-# Helper function to update agent status
-def update_agent_status(agent_type, new_status, components):
-    """Update the status of an agent in the UI."""
-    st.session_state.agent_statuses[agent_type] = new_status
-    render_agent_card(agent_type, new_status, components[agent_type])
 
 # Function to display results
 def display_results(result, processing_time):
@@ -427,11 +478,11 @@ def display_results(result, processing_time):
     # Save the result to a file
     saved_filepath = save_output_to_file(result_text)
     
-    # Show success message with filepath
-    st.success(f"Analysis completed in {processing_time:.2f} seconds and saved to {saved_filepath}")
+    # Show success message
+    st.success(f"Analysis completed in {processing_time:.2f} seconds")
     
     # Create tabs for different views
-    result_tabs = st.tabs(["Report", "Chat with Document", "Adjust Analysis", "Agent Details", "Technical Info"])
+    result_tabs = st.tabs(["Report", "Chat with Document", "Adjust Analysis", "Technical Info"])
     
     with result_tabs[0]:
         st.subheader("Issues Identification Results")
@@ -442,26 +493,31 @@ def display_results(result, processing_time):
             if scores:
                 # Show assessment scores in metrics
                 st.info("Analysis Quality Assessment")
-                cols = st.columns(len(scores))
+                metric_cols = st.columns(len(scores))
                 
                 for i, (key, value) in enumerate(scores.items()):
-                    cols[i].metric(key.replace("_score", "").title(), f"{value}/5")
+                    # Format key from snake_case to title case
+                    display_key = key.replace("_score", "").replace("_", " ").title()
+                    metric_cols[i].metric(display_key, f"{value}/5")
                 
                 # Show summary assessment
                 if "summary" in review_result:
-                    st.info(f"Review Feedback: {review_result['summary']}")
+                    with st.expander("Review Feedback", expanded=False):
+                        st.markdown(f"**{review_result['summary']}**")
+                        
+                        # Show improvement suggestions if available
+                        if "improvement_suggestions" in review_result and review_result["improvement_suggestions"]:
+                            st.markdown("### Improvement Suggestions")
+                            for suggestion in review_result["improvement_suggestions"]:
+                                st.markdown(f"- **{suggestion.get('area', 'General')}**: {suggestion.get('suggestion', '')}")
         
         # Display enhanced result
-        enhanced_html = enhance_result_display(result_text, "issues")
+        enhanced_html = enhance_result_display(result_text, "issues", detail_level.lower())
         st.markdown(enhanced_html, unsafe_allow_html=True)
         
         # Download option
-        st.download_button(
-            "Download Issues Report",
-            data=result_text,
-            file_name=os.path.basename(saved_filepath),
-            mime="text/html"
-        )
+        st.divider()
+        create_download_button(result_text, os.path.basename(saved_filepath))
     
     with result_tabs[1]:
         st.subheader("Chat about this Issues Report")
@@ -510,7 +566,7 @@ def display_results(result, processing_time):
             new_instructions = st.text_area(
                 "Analysis Instructions",
                 value=user_instructions,
-                height=150,
+                height=100,
                 help="Based on the chat, what specific aspects would you like the analysis to focus on?"
             )
             
@@ -533,7 +589,7 @@ def display_results(result, processing_time):
             reanalyze_submitted = st.form_submit_button("Reanalyze Document", type="primary")
         
         if reanalyze_submitted:
-            # Update settings in session state
+            # Update session state variables for the next run
             st.session_state.detail_level = new_detail_level
             st.session_state.temperature = new_temperature
             st.session_state.num_chunks = new_num_chunks
@@ -544,14 +600,6 @@ def display_results(result, processing_time):
             # Reset processing status
             st.session_state.processing_complete = False
             st.session_state.agent_result = None
-            st.session_state.agent_statuses = {
-                "planner": "waiting",
-                "extractor": "waiting",
-                "aggregator": "waiting",
-                "evaluator": "waiting",
-                "formatter": "waiting",
-                "reviewer": "waiting"
-            }
             
             # Show processing message
             st.info("Starting reanalysis with updated settings...")
@@ -560,44 +608,13 @@ def display_results(result, processing_time):
             process_document()
     
     with result_tabs[3]:
-        st.subheader("Agent Interaction Details")
-        if st.session_state.agent_logs:
-            # Use the log formatter
-            log_html = format_log_entries(st.session_state.agent_logs)
-            st.markdown(log_html, unsafe_allow_html=True)
-        else:
-            st.info("Agent interaction logs are not available. Enable 'Show Agent Interactions' in settings to see detailed logs in your next analysis.")
-    
-    with result_tabs[4]:
         st.subheader("Technical Information")
-        # Calculate the actual chunk size used
-        actual_chunk_size = len(document_text) // num_chunks
-        
-        tech_details = {
-            "model_used": selected_model,
-            "temperature": temperature,
-            "detail_level": detail_level,
-            "document_length": len(document_text),
-            "number_of_chunks": num_chunks,
-            "calculated_chunk_size": actual_chunk_size,
-            "max_rpm": max_rpm,
-            "processing_time_seconds": round(processing_time, 2),
-            "output_file": saved_filepath,
-            "reviewer_enabled": enable_reviewer,
-            "user_preferences": {
-                "user_instructions": user_instructions if user_instructions else "None provided",
-                "focus_areas": focus_areas
-            }
-        }
-        
-        with st.expander("Analysis Configuration", expanded=False):
-            st.json(tech_details)
         
         # Document stats if available
         document_info = st.session_state.document_info
         if document_info and "basic_stats" in document_info:
             stats = document_info["basic_stats"]
-            st.subheader("Document Statistics")
+            st.markdown("### Document Statistics")
             
             # Create columns for stats
             col1, col2, col3 = st.columns(3)
@@ -609,10 +626,35 @@ def display_results(result, processing_time):
                 st.metric("Characters", stats.get("char_count", 0))
             with col3:
                 st.metric("Est. Tokens", stats.get("estimated_tokens", 0))
+                st.metric("Chunks Processed", num_chunks)
+        
+        # Technical configuration details
+        st.markdown("### Analysis Configuration")
+        tech_details = {
+            "model_used": selected_model,
+            "temperature": temperature,
+            "detail_level": detail_level,
+            "document_length": len(document_text),
+            "number_of_chunks": num_chunks,
+            "calculated_chunk_size": len(document_text) // num_chunks,
+            "max_rpm": max_rpm,
+            "processing_time_seconds": round(processing_time, 2),
+            "output_file": saved_filepath,
+            "reviewer_enabled": enable_reviewer,
+            "user_preferences": {
+                "user_instructions": user_instructions if user_instructions else "None provided",
+                "focus_areas": focus_areas
+            }
+        }
+        
+        # Display in a collapsible section
+        with st.expander("Configuration Details", expanded=False):
+            st.json(tech_details)
         
         # Show plan if available
         if isinstance(result, dict) and "_metadata" in result and "plan" in result["_metadata"]:
-            with st.expander("Agent Plan", expanded=False):
+            st.markdown("### Agent Plan")
+            with st.expander("Planner-Generated Instructions", expanded=False):
                 st.json(result["_metadata"]["plan"])
 
 # Run when process button is clicked
@@ -620,14 +662,6 @@ if process_button:
     # Reset processing flags
     st.session_state.processing_complete = False
     st.session_state.agent_result = None
-    st.session_state.agent_statuses = {
-        "planner": "waiting",
-        "extractor": "waiting",
-        "aggregator": "waiting",
-        "evaluator": "waiting",
-        "formatter": "waiting",
-        "reviewer": "waiting"
-    }
     
     # Process the document
     process_document()
