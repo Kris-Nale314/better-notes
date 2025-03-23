@@ -1,45 +1,79 @@
-<table>
-<tr>
-<td>
-<img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logo.svg" alt="Better-Notes logo" width="30%"/>
+<div align="center">
+  <img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logo.svg" alt="Better-Notes logo" width="180px"/>
+  <h1>Better-Notes</h1>
+  <h3>Agentic Document Analysis for Meaningful Insights</h3>
+  <p>Transform documents and meeting transcripts into structured insights using<br/>a team of specialized AI agents that collaborate, reason, and adapt.</p>
+</div>
 
-# Better-Notes
-## Agentic Document Analysis for Meaningful Insights
+<p align="center">
+  <a href="#-what-makes-this-different">Key Features</a> •
+  <a href="#-the-architecture">Architecture</a> •
+  <a href="#-the-agent-crew-system">Agent Crews</a> •
+  <a href="#-getting-started">Getting Started</a> •
+  <a href="#-project-structure">Structure</a> •
+  <a href="#-why-its-interesting">Benefits</a>
+</p>
 
-> Transform documents and meeting transcripts into structured insights using a team of specialized AI agents that collaborate, reason, and adapt.
+---
 
 ## 🧠 What Makes This Different
 
 **Better Notes** isn't just another summarizer. It's a modular, multi-agent system that works together like a team of specialists to analyze documents and deliver insights you can actually use:
 
-- **Specialized Agents**: Each agent is optimized for a specific task (extraction, aggregation, evaluation, formatting, review)
-- **Macro-Chunking**: Handles documents up to 100k tokens by processing in 10k-token macro-chunks (very different from RAG's tiny chunks)
-- **Metadata Layering**: Each agent adds and refines metadata, creating progressively richer analysis
-- **Planning Capability**: The Planner agent acts as a "meta-agent" that optimizes the analysis approach for each document
-- **JSON-Configurable Crews**: Different analysis teams defined through configuration rather than code changes
+<table>
+<tr>
+  <td width="50%" valign="top">
+    <h4>🤖 Specialized Agents</h4>
+    Each agent is optimized for a specific task (extraction, aggregation, evaluation, formatting, review)
+    <h4>📊 Metadata Layering</h4>
+    Each agent adds and refines metadata, creating progressively richer analysis
+    <h4>🎛️ JSON-Configurable Crews</h4>
+    Different analysis teams defined through configuration rather than code changes
+  </td>
+  <td width="50%" valign="top">
+    <h4>📝 Macro-Chunking</h4>
+    Handles documents up to 100k tokens by processing in 10k-token macro-chunks (very different from RAG)
+    <h4>🧩 Planning Capability</h4>
+    The Planner agent acts as a "meta-agent" that optimizes the analysis approach for each document
+    <h4>💬 Post-Analysis Chat</h4>
+    Interact with your documents through natural conversation using the analysis context
+  </td>
+</tr>
+</table>
 
-```
-    A[Document Upload] --> B[Macro-Chunking]
-
-    B --> C[Planner Agent]
-    C -- Creates tailored instructions --> D
-    
-    D[Agent Crew]
-    D1[Extractor] --> D2[Aggregator]
-    D2 --> D3[Evaluator]
-    D3 --> D4[Formatter]
-    D4 --> D5[Reviewer]
-    
-    D --> E[Analysis + Chat]
-```
+<div align="center">
+  <img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logic.svg" alt="Better-Notes Logic" width="90%"/>
+  <em>The Planner Agent creates a tailored approach for each document, coordinating specialized agents that extract, process, and organize information</em>
+</div>
 
 ## 📊 Features In Action
 
-- **Issues Analysis**: Identify problems, challenges, and risks categorized by severity
-- **Progressive Metadata**: Each agent adds layers of understanding (mentions, confidence, impact)
-- **Post-Analysis Chat**: Ask questions about the document with full context from the analysis
-- **Reanalysis & Refinement**: Adjust parameters and focus areas to refine insights
-- **Focus Customization**: Target analysis on specific areas (Technical, Process, Resource, etc.)
+<table>
+<tr>
+  <td width="60%">
+    <h4>🚨 Issues Analysis</h4>
+    <p>Identify problems, challenges, and risks categorized by severity. Each issue includes detailed context, impact assessment, and relationship mapping to other identified issues.</p>
+
+    <h4>🔄 Reanalysis & Refinement</h4>
+    <p>Adjust parameters and focus areas to refine insights when you need a different perspective or level of detail from your document.</p>
+  </td>
+  <td width="40%">
+    <h4>🔍 Focus Customization</h4>
+    <ul>
+      <li><strong>Technical:</strong> Implementation, architecture, infrastructure</li>
+      <li><strong>Process:</strong> Workflows, procedures, methodologies</li>
+      <li><strong>Resource:</strong> Staffing, budget, time constraints</li>
+      <li><strong>Quality:</strong> Performance, standards, testing</li>
+      <li><strong>Risk:</strong> Compliance, security, strategic hazards</li>
+    </ul>
+  </td>
+</tr>
+</table>
+
+<div align="center">
+  <img src="https://via.placeholder.com/800x300?text=Screenshot+of+Better+Notes+Interface" alt="Better Notes Interface" width="90%"/>
+  <em>From document upload to structured insight in minutes</em>
+</div>
 
 ## 🧩 The Architecture
 
@@ -52,43 +86,84 @@ Better Notes implements four foundational patterns that elevate AI applications:
 | **Planning** | AI creating step-by-step strategies | Planner agent designs document-specific instructions for other agents |
 | **Collaboration** | Specialized AIs working together | The entire pipeline divides complex analysis into specialized expert tasks |
 
-<img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logic.svg" alt="Better-Notes Logic" width="80%"/>
+### Agent Pipeline Flow
+
+```
+flow 
+    A[Document Upload] --> B[Macro-Chunking]
+    B --> C[Planner Agent]
+    C -- Creates tailored instructions --> D
+    
+    D[Agent Crew]
+    D1[Extractor] --> D2[Aggregator]
+    D2 --> D3[Evaluator]
+    D3 --> D4[Formatter]
+    D4 --> D5[Reviewer]
+    
+    D --> E[Analysis Report]
+    E --> F[Post-Analysis Features]
+    
+    F[Post-Analysis Features]
+    F1[Document Chat] 
+    F2[Reanalysis Options]
+    F3[Technical Insights]
+    
+```
 
 ## 🔄 The Agent Crew System
 
 Assessment Crews are specialized teams of AI agents that work together through a structured, configurable workflow:
 
-1. **Planner Agent** determines the optimal approach given the document and user preferences
-2. **Extractor Agent** identifies relevant information from each document chunk
-3. **Aggregator Agent** combines findings, eliminates duplicates, and enhances metadata
-4. **Evaluator Agent** assesses importance, priority, and relationships
-5. **Formatter Agent** creates structured, navigable reports
-6. **Reviewer Agent** performs quality assessment across multiple dimensions
-
-Each crew is defined through a JSON configuration file that specifies agent roles, instructions, and outputs:
-
+<table>
+<tr>
+  <td width="30%" valign="top">
+    <h4>🧠 Planner Agent</h4>
+    <p>Determines the optimal approach given the document and user preferences</p>
+    <h4>🔍 Extractor Agent</h4>
+    <p>Identifies relevant information from each document chunk</p>
+    <h4>🧩 Aggregator Agent</h4>
+    <p>Combines findings, eliminates duplicates, and enhances metadata</p>
+  </td>
+  <td width="30%" valign="top">
+    <h4>⚖️ Evaluator Agent</h4>
+    <p>Assesses importance, priority, and relationships</p>
+    <h4>📊 Formatter Agent</h4>
+    <p>Creates structured, navigable reports</p>
+    <h4>🔎 Reviewer Agent</h4>
+    <p>Performs quality assessment across multiple dimensions</p>
+  </td>
+  <td width="40%" valign="top">
+    <h4>Configurable Through JSON</h4>
+    
 ```json
 {
   "agents": {
     "extraction": {
       "role": "Issue Extractor",
-      "goal": "Identify all potential issues in document chunks",
-      "instructions": "Analyze the document chunk to identify issues...",
+      "goal": "Identify all potential issues",
+      "instructions": "Analyze the document...",
       "output_format": {...}
-    },
-    // Other agent definitions
+    }
   }
 }
 ```
+  </td>
+</tr>
+</table>
 
 ## 🚀 Getting Started
 
 ```bash
+# Clone repository
 git clone https://github.com/kris-nale314/better-notes.git
 cd better-notes
+
+# Set up environment
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+
+# Configure and run
 cp .env.example .env  # Add your OpenAI API key
 streamlit run app.py
 ```
@@ -120,20 +195,48 @@ better-notes/
 │   ├── progress_tracking.py    # Progress visualization
 │   ├── result_formatting.py    # Output enhancement
 │   └── chat_interface.py       # Post-analysis chat
-├── pages/
-│   ├── 01_Summary.py           # Document summary page
-│   ├── 02_Assess_Issues.py     # Issues analysis page
 ```
 
 ## 🔍 Why It's Interesting
 
 Better Notes demonstrates practical applications of several emerging techniques in AI:
 
-1. **Agent Specialization**: Different agents optimized for specific subtasks
-2. **Planning Layers**: Meta-agents that coordinate and optimize other agents
-3. **Metadata Enhancement**: Progressive enrichment of content through the pipeline
-4. **Crew-Based Architecture**: Configurable teams of agents with defined workflows
-5. **UI/UX for Agent Systems**: Clean visualization of complex agent processes
+<table>
+<tr>
+  <td width="33%" align="center">
+    <h3>🤖</h3>
+    <strong>Agent Specialization</strong>
+    <p>Different agents optimized for specific subtasks</p>
+  </td>
+  <td width="33%" align="center">
+    <h3>🧠</h3>
+    <strong>Planning Layers</strong>
+    <p>Meta-agents that coordinate and optimize other agents</p>
+  </td>
+  <td width="33%" align="center">
+    <h3>📊</h3>
+    <strong>Metadata Enhancement</strong>
+    <p>Progressive enrichment through the pipeline</p>
+  </td>
+</tr>
+<tr>
+  <td width="33%" align="center">
+    <h3>👥</h3>
+    <strong>Crew-Based Architecture</strong>
+    <p>Configurable teams with defined workflows</p>
+  </td>
+  <td width="33%" align="center">
+    <h3>🖥️</h3>
+    <strong>UI/UX for Agent Systems</strong>
+    <p>Clean visualization of complex processes</p>
+  </td>
+  <td width="33%" align="center">
+    <h3>🔄</h3>
+    <strong>Adaptive Processing</strong>
+    <p>Document-specific analysis approaches</p>
+  </td>
+</tr>
+</table>
 
 It's an experimental project that helps to understand how modular AI systems can be built to evolve and adapt to more complex tasks.
 
@@ -146,6 +249,8 @@ It's an experimental project that helps to understand how modular AI systems can
 - [ ] Action items extraction crew
 - [ ] Meeting insights analysis crew
 
+<div align="center">
+
 ## 🤝 Contribution
 
 Contributions welcome! 
@@ -153,7 +258,5 @@ Contributions welcome!
 ## 📃 License
 
 [MIT License](LICENSE)
-</td>
-</tr>
-</table>
-```
+
+</div>
