@@ -1,4 +1,5 @@
-# 🧠 Better Notes: Multi-Agent Document Analysis
+# 📝 Better-Notes
+## Multi-Agent Document Analysis
 
 > Transform meeting transcripts and long documents into structured insights using AI agents that collaborate, reason, and adapt.
 
@@ -48,6 +49,15 @@ Better Notes implements four foundational patterns that level up AI applications
 - `PlannerAgent` creates document-specific instructions
 - Specialized agents like `ExtractorAgent` focus on single tasks
 - Configurable through JSON files, no code changes needed
+
+</td>
+</tr>
+<tr>
+<td colspan="2" align="center">
+<img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logic.svg" alt="Better-Notes Architecture" width="80%"/>
+</td>
+</tr>
+</table>
 
 
 ## 💡 Analysis Types
