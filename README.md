@@ -42,7 +42,7 @@
 </table>
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logic.svg" alt="Better-Notes Logic" width="95%"/>
+  <img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logic.svg" alt="Better-Notes Logic" width="90%"/>
   <em>The Planner Agent creates a tailored approach for each document, coordinating specialized agents that extract, process, and organize information</em>
 </div>
 
@@ -53,7 +53,6 @@
   <td width="60%">
     <h4>🚨 Issues Analysis</h4>
     <p>Identify problems, challenges, and risks categorized by severity. Each issue includes detailed context, impact assessment, and relationship mapping to other identified issues.</p>
-
     <h4>🔄 Reanalysis & Refinement</h4>
     <p>Adjust parameters and focus areas to refine insights when you need a different perspective or level of detail from your document.</p>
   </td>
