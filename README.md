@@ -115,7 +115,7 @@ Assessment Crews are specialized teams of AI agents that work together through a
 
 <table>
 <tr>
-  <td width="30%" valign="top">
+  <td width="50%" valign="top">
     <h4>🧠 Planner Agent</h4>
     <p>Determines the optimal approach given the document and user preferences</p>
     <h4>🔍 Extractor Agent</h4>
@@ -123,16 +123,18 @@ Assessment Crews are specialized teams of AI agents that work together through a
     <h4>🧩 Aggregator Agent</h4>
     <p>Combines findings, eliminates duplicates, and enhances metadata</p>
   </td>
-  <td width="30%" valign="top">
+  <td width="50%" valign="top">
     <h4>⚖️ Evaluator Agent</h4>
     <p>Assesses importance, priority, and relationships</p>
     <h4>📊 Formatter Agent</h4>
     <p>Creates structured, navigable reports</p>
     <h4>🔎 Reviewer Agent</h4>
     <p>Performs quality assessment across multiple dimensions</p>
-  </td>
-  <td width="40%" valign="top">
-    <h4>Configurable Through JSON</h4>
+    </td>
+    </tr>
+    <tr>
+    <td colspan="2" align="center">
+    <h4> 🤝 Configurable Through JSON</h4>
     
 ```json
 {
