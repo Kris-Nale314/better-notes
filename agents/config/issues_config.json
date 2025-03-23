@@ -1,170 +1,226 @@
 {
-  "agent_config": {
-    "extraction": {
+  "metadata": {
+    "version": "2.0",
+    "description": "Enhanced configuration for issues identification with metadata layering",
+    "last_updated": "2025-03-22"
+  },
+  
+  "analysis_definition": {
+    "issue": {
+      "definition": "Any problem, challenge, risk, or concern that may impact objectives, efficiency, or quality",
+      "examples": [
+        "Missing requirements or specifications",
+        "Technical limitations or constraints",
+        "Process inefficiencies or bottlenecks",
+        "Resource constraints or availability issues",
+        "Timeline risks or schedule concerns"
+      ],
+      "non_examples": [
+        "Simple observations without negative impact",
+        "Standard procedures working as expected",
+        "Speculative ideas without evidence of problems"
+      ]
+    },
+    "severity_levels": {
+      "critical": "Immediate threat to operations, security, or compliance; significant financial or reputational risk; blocks major deliverables",
+      "high": "Significant impact on effectiveness or efficiency; requires substantial resources to address; will likely escalate if not addressed soon",
+      "medium": "Causes ongoing inefficiency or limitations; negative impact on some stakeholders; should be addressed but isn't urgent",
+      "low": "Minor inconvenience or concern; minimal impact on operations or outcomes; could be addressed through regular improvements"
+    }
+  },
+  
+  "workflow": {
+    "stages": ["extraction", "aggregation", "evaluation", "formatting", "review"],
+    "review_principles": [
+      "Verify alignment with user instructions and preferences",
+      "Assess consistency of severity ratings and analysis",
+      "Ensure appropriate detail level throughout the report",
+      "Check that the most significant issues are appropriately highlighted"
+    ]
+  },
+  
+  "agents": {
+    "extractor": {
       "role": "Issue Extractor",
-      "goal": "Identify all potential issues, problems, and challenges in document chunks",
-      "backstory": "I'm an expert at spotting problems, challenges, and risks in documents. I have a keen eye for explicit and implicit issues."
+      "goal": "Identify all potential issues in document chunks and add initial metadata",
+      "instructions": "Analyze the document chunk to identify any issues, problems, or challenges. For each issue, provide a clear title, detailed description, initial severity assessment, and relevant keywords. Also note where in the document (section or context) this issue appears.",
+      "output_format": {
+        "issues": [
+          {
+            "title": "Draft issue title - concise label for the issue",
+            "description": "Detailed description of the issue, implications, and potential impacts",
+            "initial_severity": "One of: critical, high, medium, low",
+            "keywords": ["list", "of", "relevant", "keywords"],
+            "location_context": "Relevant text or section reference where this issue was found",
+            "chunk_index": "Index of the document chunk where this issue was found"
+          }
+        ]
+      }
     },
-    "aggregation": {
+    
+    "aggregator": {
       "role": "Issue Aggregator",
-      "goal": "Combine and deduplicate issues from multiple extractions",
-      "backstory": "I specialize in organizing and consolidating information, removing duplicates while preserving important context."
+      "goal": "Combine and deduplicate issues from multiple extractions while enhancing metadata",
+      "instructions": "Review all issues identified in different chunks and create a consolidated, deduplicated list. Use titles, descriptions, and keywords to identify similar issues. Combine similar issues, track mention frequency, and add confidence scores for your aggregations.",
+      "output_format": {
+        "aggregated_issues": [
+          {
+            "title": "Refined issue title",
+            "description": "Combined description from all mentions",
+            "initial_severity": "Most common severity from extraction phase",
+            "keywords": ["expanded", "list", "of", "relevant", "keywords"],
+            "mention_count": "Number of times this issue was mentioned",
+            "confidence": "Aggregation confidence (high, medium, low)",
+            "variations": ["Different ways the issue was described"],
+            "contexts": ["Array of relevant text snippets from different mentions"]
+          }
+        ]
+      }
     },
-    "evaluation": {
+    
+    "evaluator": {
       "role": "Issue Evaluator",
-      "goal": "Assess severity of identified issues using defined criteria",
-      "backstory": "I'm an expert at prioritizing and evaluating problems. I categorize issues as critical, high, medium, or low based on their impact and urgency."
+      "goal": "Assess severity of identified issues and add impact assessment metadata",
+      "instructions": "Evaluate each issue and assign a final severity level based on impact, urgency, and scope. Provide a detailed rationale for each rating, assess the potential impact, and identify relationships between issues.",
+      "output_format": {
+        "evaluated_issues": [
+          {
+            "title": "Issue title",
+            "description": "Issue description",
+            "severity": "One of: critical, high, medium, low",
+            "rationale": "Justification for the severity rating",
+            "impact_assessment": "Analysis of potential consequences if not addressed",
+            "priority": "Numerical priority (1-10, with 1 being highest)",
+            "related_issues": ["References to related issues by title"],
+            "mention_count": "Number of times this issue was mentioned",
+            "keywords": ["final", "list", "of", "keywords"]
+          }
+        ]
+      }
     },
-    "formatting": {
+    
+    "formatter": {
       "role": "Report Formatter",
-      "goal": "Create a visually organized, comprehensive report that presents issues in a logical manner",
-      "backstory": "I'm a documentation specialist who creates clear, structured reports that make complex information easy to understand and act upon. I excel at organizing information for maximum clarity and impact."
-    }
-  },
-  "extraction": {
-    "prompt_template": "You are an expert analyst specializing in issue identification. Your task is to carefully analyze the following document chunk to identify any issues, problems, challenges, or concerns.\n\nCHUNK TEXT:\n{chunk_text}\n\nFor each issue you identify, please provide:\n1. A clear, concise title\n2. A detailed description of the issue\n3. Relevant context or direct quotes from the document\n\nFocus on the most significant issues first. Provide specific context when possible.",
-    "output_schema": {
-      "type": "object",
-      "properties": {
-        "issues": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "title": {
-                "type": "string",
-                "description": "A short, descriptive title for the issue"
-              },
-              "description": {
-                "type": "string",
-                "description": "A clear description of the issue, its implications, and potential impacts"
-              },
-              "context": {
-                "type": "string",
-                "description": "Relevant text from the document that mentions or implies this issue"
-              }
-            },
-            "required": ["title", "description"]
-          }
+      "goal": "Create a visually organized, comprehensive report of issues with enhanced navigation",
+      "instructions": "Format the evaluated issues into a structured report. Group issues by severity, create an executive summary highlighting critical and high-severity issues, and include statistics on issue distribution. Add visual priorities and section placements for key issues.",
+      "report_structure": {
+        "sections": [
+          "Executive Summary",
+          "Critical Issues",
+          "High-Priority Issues",
+          "Medium-Priority Issues",
+          "Low-Priority Issues",
+          "Summary Statistics",
+          "Recommendations"
+        ],
+        "executive_summary_guidelines": "Focus on critical and high-severity issues, their potential impact, and any patterns or themes",
+        "issue_format": {
+          "title": "Clear, descriptive title",
+          "severity_indicator": "Visual indicator of severity level",
+          "description": "Full issue description",
+          "rationale": "Why this severity level was assigned",
+          "impact": "Potential consequences",
+          "priority": "Action priority",
+          "related_issues": "Links to related issues"
         }
       },
-      "required": ["issues"]
-    }
-  },
-  "aggregation": {
-    "prompt_template": "You are an expert aggregator specializing in combining multiple issue lists. Your task is to review all the issues identified in different chunks of a document and create a consolidated, deduplicated list.\n\nFor each unique issue:\n1. Create a clear, concise title\n2. Combine descriptions from similar issues\n3. Track how many times the issue was mentioned\n4. Preserve relevant context from different mentions\n\nRemove duplicate issues but preserve the richness of multiple mentions.",
-    "output_schema": {
-      "type": "object",
-      "properties": {
-        "aggregated_issues": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "title": {
-                "type": "string",
-                "description": "A short, descriptive title for the issue"
-              },
-              "description": {
-                "type": "string",
-                "description": "A clear description combining insights from all mentions"
-              },
-              "mention_count": {
-                "type": "integer",
-                "description": "How many times this issue was mentioned"
-              },
-              "contexts": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "Relevant text snippets from different mentions"
-              }
-            },
-            "required": ["title", "description", "mention_count"]
-          }
-        }
-      },
-      "required": ["aggregated_issues"]
-    }
-  },
-  "evaluation": {
-    "prompt_template": "You are an expert evaluator specializing in assessing issue severity. Your task is to evaluate each issue and assign an appropriate severity level.\n\nFor each issue, assign one of these severity levels:\n- CRITICAL\n- HIGH\n- MEDIUM\n- LOW\n\nProvide a brief justification for each severity rating.",
-    "criteria": {
-      "critical": "Represents immediate threats to operations, security, or compliance; could cause significant financial loss or reputational damage; blocks major processes or deliverables",
-      "high": "Significantly impacts effectiveness or efficiency; requires substantial resources to address; will likely escalate if not addressed soon",
-      "medium": "Causes ongoing inefficiency or limitations; negatively impacts some stakeholders; should be addressed, but isn't urgent",
-      "low": "Represents minor inconveniences or concerns; has minimal impact on operations or outcomes; could be addressed through regular maintenance or improvements"
+      "html_template": "<div class=\"issues-report\">\n  <h1>Issues Analysis Report</h1>\n\n  <div class=\"executive-summary\">\n    <h2>📋 Executive Summary</h2>\n    <p>[Executive summary content]</p>\n  </div>\n\n  <div class=\"issues-section critical-section\">\n    <h2>🔴 Critical Issues</h2>\n    \n    [Critical issues content]\n  </div>\n\n  <div class=\"issues-section high-section\">\n    <h2>🟠 High-Priority Issues</h2>\n    \n    [High priority issues content]\n  </div>\n\n  <div class=\"issues-section medium-section\">\n    <h2>🟡 Medium-Priority Issues</h2>\n    \n    [Medium priority issues content]\n  </div>\n\n  <div class=\"issues-section low-section\">\n    <h2>🟢 Low-Priority Issues</h2>\n    \n    [Low priority issues content]\n  </div>\n\n  <div class=\"summary-stats\">\n    <h2>📊 Summary Statistics</h2>\n    [Summary statistics content]\n  </div>\n\n  <div class=\"recommendations\">\n    <h2>💡 Recommendations</h2>\n    [Recommendations content]\n  </div>\n</div>"
     },
-    "output_schema": {
-      "type": "object",
-      "properties": {
-        "evaluated_issues": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "title": {
-                "type": "string",
-                "description": "A short, descriptive title for the issue"
-              },
-              "description": {
-                "type": "string",
-                "description": "A clear description of the issue"
-              },
-              "severity": {
-                "type": "string",
-                "enum": ["critical", "high", "medium", "low"],
-                "description": "The severity level of the issue"
-              },
-              "rationale": {
-                "type": "string",
-                "description": "Brief justification for the severity rating"
-              },
-              "mention_count": {
-                "type": "integer",
-                "description": "How many times this issue was mentioned"
-              }
-            },
-            "required": ["title", "description", "severity", "rationale"]
-          }
-        }
+
+    "reviewer": {
+      "role": "Analysis Reviewer",
+      "goal": "Ensure the analysis meets quality standards and aligns with user expectations",
+      "instructions": "Review the formatted report to ensure it aligns with user instructions, meets quality standards, and presents issues accurately. Check for consistency in severity ratings, proper organization, and overall quality.",
+      "review_criteria": {
+        "alignment": "Does the analysis align with user instructions and focus areas?",
+        "completeness": "Does the report address all significant issues at the appropriate detail level?",
+        "consistency": "Are severity ratings applied consistently throughout the analysis?",
+        "clarity": "Is the report clear, well-organized, and actionable?",
+        "balance": "Are issues presented in a balanced way without over or under-emphasis?"
       },
-      "required": ["evaluated_issues"]
+      "output_format": {
+        "review_result": {
+          "meets_requirements": "Boolean indicating if the report meets all requirements",
+          "assessment": {
+            "alignment_score": "1-5 score for alignment with user needs",
+            "completeness_score": "1-5 score for completeness",
+            "consistency_score": "1-5 score for consistency",
+            "clarity_score": "1-5 score for clarity",
+            "balance_score": "1-5 score for balance"
+          },
+          "improvement_suggestions": [
+            {
+              "area": "Area needing improvement (e.g., 'Critical Issues Section')",
+              "issue": "Description of the issue",
+              "suggestion": "Specific improvement suggestion"
+            }
+          ],
+          "summary": "Overall assessment summary",
+          "confidence": "Reviewer's confidence in the assessment (high, medium, low)"
+        }
+      }
     }
   },
-  "formatting": {
-    "prompt_template": "You are an expert documentation specialist. Your task is to format the evaluated issues into a clear, visually appealing, and well-organized report that presents the information in the most useful way possible.\n\nFollow these organizational principles:\n\n1. Begin with an executive summary highlighting the most critical findings\n2. Group issues by severity (Critical, High, Medium, Low)\n3. Within each severity group, organize issues thematically when possible\n4. Use rich Markdown formatting to improve readability\n5. Create a summary table at the end showing issue counts by severity\n\nUse these formatting elements:\n- Use level 1 (#) headers for main sections\n- Use level 2 (##) headers for severity levels\n- Use level 3 (###) headers for individual issues\n- Use bold text for important points\n- Use bullet points for lists of related ideas\n- Use blockquotes (>) for direct references from the document\n- Use tables for structured information\n- Use horizontal rules (---) to separate major sections\n\nCreate a professional, actionable report that helps the reader quickly understand the issues and their implications.",
-    "format_template": "<div class=\"issues-report\">\n  <h1>Issues Analysis Report</h1>\n\n  <div class=\"executive-summary\">\n    <h2>📋 Executive Summary</h2>\n    <p>[Provide a concise overview of the key findings, focusing on Critical and High-severity issues. Highlight the most important issues and their potential impact.]</p>\n  </div>\n\n  <div class=\"issues-section critical-section\">\n    <h2>🔴 Critical Issues</h2>\n    \n    [If no critical issues, write \"<p>No critical issues were identified.</p>\"]\n\n    [For each critical issue:]\n    <div class=\"issue-card critical\">\n      <h3>[Issue title]</h3>\n      <div class=\"issue-meta\">\n        <span class=\"severity critical\">Critical</span>\n      </div>\n      <div class=\"issue-content\">\n        <p><strong>Description:</strong> [Detailed description of the issue]</p>\n        <p><strong>Rationale:</strong> [Why this is rated as critical]</p>\n        <p><strong>Context:</strong> [Relevant context or direct quotes from the document]</p>\n      </div>\n    </div>\n  </div>\n\n  <div class=\"issues-section high-section\">\n    <h2>🟠 High-Priority Issues</h2>\n    \n    [If no high-priority issues, write \"<p>No high-priority issues were identified.</p>\"]\n\n    [For each high issue:]\n    <div class=\"issue-card high\">\n      <h3>[Issue title]</h3>\n      <div class=\"issue-meta\">\n        <span class=\"severity high\">High</span>\n      </div>\n      <div class=\"issue-content\">\n        <p><strong>Description:</strong> [Detailed description of the issue]</p>\n        <p><strong>Rationale:</strong> [Why this is rated as high-priority]</p>\n        <p><strong>Context:</strong> [Relevant context or direct quotes from the document]</p>\n      </div>\n    </div>\n  </div>\n\n  <div class=\"issues-section medium-section\">\n    <h2>🟡 Medium-Priority Issues</h2>\n    \n    [If no medium-priority issues, write \"<p>No medium-priority issues were identified.</p>\"]\n\n    [For each medium issue:]\n    <div class=\"issue-card medium\">\n      <h3>[Issue title]</h3>\n      <div class=\"issue-meta\">\n        <span class=\"severity medium\">Medium</span>\n      </div>\n      <div class=\"issue-content\">\n        <p><strong>Description:</strong> [Detailed description of the issue]</p>\n        <p><strong>Rationale:</strong> [Why this is rated as medium-priority]</p>\n        <p><strong>Context:</strong> [Relevant context or direct quotes from the document]</p>\n      </div>\n    </div>\n  </div>\n\n  <div class=\"issues-section low-section\">\n    <h2>🟢 Low-Priority Issues</h2>\n    \n    [If no low-priority issues, write \"<p>No low-priority issues were identified.</p>\"]\n\n    [For each low issue:]\n    <div class=\"issue-card low\">\n      <h3>[Issue title]</h3>\n      <div class=\"issue-meta\">\n        <span class=\"severity low\">Low</span>\n      </div>\n      <div class=\"issue-content\">\n        <p><strong>Description:</strong> [Detailed description of the issue]</p>\n        <p><strong>Rationale:</strong> [Why this is rated as low-priority]</p>\n        <p><strong>Context:</strong> [Relevant context or direct quotes from the document]</p>\n      </div>\n    </div>\n  </div>\n\n  <div class=\"summary-stats\">\n    <h2>📊 Summary Statistics</h2>\n    <table>\n      <thead>\n        <tr>\n          <th>Severity</th>\n          <th>Count</th>\n          <th>Percentage</th>\n        </tr>\n      </thead>\n      <tbody>\n        <tr>\n          <td><span class=\"severity-indicator critical\"></span> Critical</td>\n          <td>x</td>\n          <td>xx%</td>\n        </tr>\n        <tr>\n          <td><span class=\"severity-indicator high\"></span> High</td>\n          <td>x</td>\n          <td>xx%</td>\n        </tr>\n        <tr>\n          <td><span class=\"severity-indicator medium\"></span> Medium</td>\n          <td>x</td>\n          <td>xx%</td>\n        </tr>\n        <tr>\n          <td><span class=\"severity-indicator low\"></span> Low</td>\n          <td>x</td>\n          <td>xx%</td>\n        </tr>\n        <tr class=\"total-row\">\n          <td><strong>Total</strong></td>\n          <td><strong>x</strong></td>\n          <td><strong>100%</strong></td>\n        </tr>\n      </tbody>\n    </table>\n  </div>\n\n  <div class=\"recommendations\">\n    <h2>💡 Recommendations</h2>\n    <ul>\n      [For each recommendation:]\n      <li>[Recommendation text]</li>\n    </ul>\n  </div>\n</div>",
-    "output_schema": {
-      "type": "object",
-      "properties": {
-        "formatted_report": {
-          "type": "string",
-          "description": "The complete formatted report in Markdown"
-        },
-        "executive_summary": {
-          "type": "string",
-          "description": "A standalone executive summary"
-        },
-        "critical_issues_count": {
-          "type": "integer",
-          "description": "Number of critical issues"
-        },
-        "high_issues_count": {
-          "type": "integer",
-          "description": "Number of high-priority issues"
-        },
-        "medium_issues_count": {
-          "type": "integer",
-          "description": "Number of medium-priority issues"
-        },
-        "low_issues_count": {
-          "type": "integer",
-          "description": "Number of low-priority issues"
+  
+  "user_options": {
+    "detail_levels": {
+      "essential": {
+        "description": "Focus only on the most significant issues",
+        "agent_guidance": {
+          "extractor": "Identify only clear, significant issues with substantial impact",
+          "aggregator": "Heavily consolidate similar issues, focus on patterns",
+          "evaluator": "Be more stringent with severity ratings",
+          "formatter": "Create a concise report focusing on the most critical issues",
+          "reviewer": "Verify that only truly significant issues are included and appropriately rated"
         }
       },
-      "required": ["formatted_report", "executive_summary"]
+      "standard": {
+        "description": "Balanced analysis of important issues",
+        "agent_guidance": {
+          "extractor": "Identify all clear issues with good balance of detail",
+          "aggregator": "Consolidate similar issues while preserving distinct variations",
+          "evaluator": "Apply standard severity criteria with balanced judgment",
+          "formatter": "Create a complete report with all identified issues",
+          "reviewer": "Check for appropriate balance and coverage of all significant issues"
+        }
+      },
+      "comprehensive": {
+        "description": "In-depth analysis of all potential issues",
+        "agent_guidance": {
+          "extractor": "Identify all issues including potential or implied problems",
+          "aggregator": "Preserve nuances between similar issues",
+          "evaluator": "Provide detailed rationales for severity ratings",
+          "formatter": "Create a detailed report with extensive context and explanations",
+          "reviewer": "Verify thorough coverage, detailed context, and comprehensive analysis"
+        }
+      }
+    },
+    "focus_areas": {
+      "technical": {
+        "description": "Technical issues related to implementation, architecture, or technology",
+        "keywords": ["technical", "architecture", "implementation", "code", "system", "technology"],
+        "review_emphasis": "Verify technical issues are described with appropriate technical accuracy and context"
+      },
+      "process": {
+        "description": "Process-related issues in workflows, procedures, or methodologies",
+        "keywords": ["process", "workflow", "procedure", "methodology", "steps", "approach"],
+        "review_emphasis": "Check that process issues clearly identify procedural bottlenecks or inefficiencies"
+      },
+      "resource": {
+        "description": "Resource constraints with staffing, budget, time, or materials",
+        "keywords": ["resource", "staffing", "budget", "time", "materials", "cost", "funding"],
+        "review_emphasis": "Ensure resource issues quantify impact and clearly identify constraints"
+      },
+      "quality": {
+        "description": "Quality concerns regarding standards, testing, or performance",
+        "keywords": ["quality", "testing", "performance", "standards", "metrics", "criteria"],
+        "review_emphasis": "Verify quality issues include specific quality criteria or standards affected"
+      },
+      "risk": {
+        "description": "Risk-related issues including compliance, security, or strategic risks",
+        "keywords": ["risk", "compliance", "security", "threat", "vulnerability", "exposure"],
+        "review_emphasis": "Check that risk issues include probability and impact assessments"
+      }
     }
   }
 }

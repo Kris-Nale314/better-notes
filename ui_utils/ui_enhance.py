@@ -479,6 +479,10 @@ def render_agent_card(agent_type, status, component):
         component: Streamlit component to render to
     """
     agent_info = {
+        "instructor": {
+            "title": "Instructor Agent", 
+            "role": "Creating tailored instructions"
+        },
         "extractor": {
             "title": "Extractor Agent", 
             "role": "Identifying patterns"
@@ -494,6 +498,10 @@ def render_agent_card(agent_type, status, component):
         "formatter": {
             "title": "Formatter Agent", 
             "role": "Creating structured report"
+        },
+        "reviewer": {
+            "title": "Reviewer Agent", 
+            "role": "Ensuring quality and alignment"
         }
     }
     
@@ -508,6 +516,17 @@ def render_agent_card(agent_type, status, component):
         "working": "agent-card agent-working",
         "complete": "agent-card agent-complete"
     }
+    
+    # Use default values if agent type is unknown
+    if agent_type not in agent_info:
+        component.markdown(f"""
+        <div class="{status_classes[status]}">
+            <h4>{status_icons[status]} Unknown Agent</h4>
+            <p>Unknown role</p>
+            <p><small>Status: {status.capitalize()}</small></p>
+        </div>
+        """, unsafe_allow_html=True)
+        return
     
     component.markdown(f"""
     <div class="{status_classes[status]}">
