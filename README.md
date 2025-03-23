@@ -1,9 +1,3 @@
-# 📝 Better-Notes
-## Multi-Agent Document Analysis
-
-> Transform meeting transcripts and long documents into structured insights using AI agents that collaborate, reason, and adapt.
-
-## ✨ Overview
 
 </td>
 </tr>
@@ -13,6 +7,13 @@
 </td>
 </tr>
 </table>
+#  Better-Notes
+## Multi-Agent Document Analysis
+
+> Transform meeting transcripts and long documents into structured insights using AI agents that collaborate, reason, and adapt.
+
+## 📝 Overview
+
 
 **Better Notes** is a modular, multi-agent system for analyzing documents up to 100k tokens to extract insights, identify issues, and organize information. Unlike basic summarizers, it uses specialized AI agents orchestrated by a Planner to create deeper, more structured analysis.
 
