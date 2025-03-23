@@ -11,8 +11,7 @@ Think of it as a team of AI analysts working together on your document:
 - Five **Specialized Agents** execute different parts of the analysis
 - The processing runs on **macro-chunks** (10k tokens each) for scale
 
-```mermaid
-flowchart LR
+```
     A[Document Upload] --> B[Macro-Chunking (10k tokens)]
     B --> C[Planner Agent]
     C --> D1[Extractor Agent]
@@ -22,8 +21,6 @@ flowchart LR
     D4 --> E[🧪 Reviewer Agent (Optional)]
     E --> F[Final Report + Metadata + Chat]
 
-    style C fill:#dfefff,stroke:#000,stroke-width:1px
-    style E fill:#fdf2ff,stroke:#000,stroke-width:1px
 ```
 
 ## 🧠 Key Concepts
@@ -51,6 +48,7 @@ Better Notes implements four foundational patterns that level up AI applications
 - `PlannerAgent` creates document-specific instructions
 - Specialized agents like `ExtractorAgent` focus on single tasks
 - Configurable through JSON files, no code changes needed
+
 
 ## 💡 Analysis Types
 

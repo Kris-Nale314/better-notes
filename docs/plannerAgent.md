@@ -1,84 +1,80 @@
-# 🧠 Planner Agent Overview
+# 🧭 The Planner Agent: Orchestrating Intelligence
 
-## What is the Planner Agent?
+## What Is the Planner Agent?
 
-The **Planner Agent** (previously called the Instructor Agent) is a **meta-agent** responsible for designing and coordinating the behavior of all other agents in a multi-agent analysis crew. It does not analyze the document itself—instead, it plans how other agents will perform their specialized roles, adapting to the document context and user preferences.
+The Planner Agent (formerly called the Instructor Agent) is a meta-agent that designs and orchestrates how other agents analyze documents. Unlike the specialized agents that process content directly, the Planner creates context-aware, document-specific instructions that guide the entire analysis process.
 
-> Think of the Planner as the director of a play: it assigns roles, gives each actor their lines, and sets the tone for the performance based on the script (the document) and the audience (the user).
+Think of the Planner as the director of a movie - it doesn't appear on screen, but it coordinates all the actors to create a cohesive performance.
 
----
+## How It Works
 
-## What Does It Do?
+The Planner receives three key inputs:
+1. **Document Metadata** - Summary, structure, length, document type
+2. **User Preferences** - Detail level, focus areas, custom instructions
+3. **Configuration** - Agent roles and capabilities from JSON config files
 
-The Planner Agent performs the following critical functions:
+It then generates a tailored plan containing:
+- **Agent Instructions** - Specific guidance for each specialized agent
+- **Emphasis Areas** - What each agent should prioritize for this document
+- **Analysis Strategy** - How to approach this particular document type
 
-### 1. **Analyzes Metadata and Preferences**
-- Ingests:
-  - Summary of the document (typically the first 2,000 tokens)
-  - Document structure and stats
-  - User-defined instructions (e.g., "focus on risks")
-  - Configuration JSON defining agent roles and goals
+```python
+plan = planner.create_plan(
+    document_info=document_info,
+    user_preferences=user_preferences,
+    crew_type="issues"
+)
+```
 
-### 2. **Generates Specialized Instructions**
-- Dynamically generates tailored instructions for each agent in the crew:
-  - **Extractor Agent**
-  - **Aggregator Agent**
-  - **Evaluator Agent**
-  - **Formatter Agent**
-  - **Reviewer Agent** (optional)
-- Provides two key components per agent:
-  - `instructions`: Detailed task-specific guidance
-  - `emphasis`: Key aspects to prioritize (e.g., severity, clarity)
+## Why It Matters
 
-### 3. **Supports Configurable Crews**
-- Uses a config-driven design (`issues_config.json`, `actions_config.json`, etc.)
-- Supports different crew types ("issues", "actions", "risks") by interpreting the `crew_type` parameter
+The Planner transforms Better Notes from a static pipeline into an adaptive system:
 
-### 4. **Provides Fallbacks**
-- If LLM generation fails or is incomplete, it auto-generates default instructions based on heuristics and config values
+1. **Document-Aware Processing**
+   - Meeting transcripts get different instructions than technical reports
+   - Long documents receive different strategies than short ones
 
----
+2. **User Preference Integration**
+   - Detail level changes how agents process information
+   - Focus areas (technical, process, etc.) influence agent priorities
 
-## Why Use a Planner Agent?
+3. **Configurability Without Code Changes**
+   - New analysis types can be created through configuration alone
+   - Behavior can be adjusted without modifying agent implementations
 
-### ✅ **Abstraction & Reusability**
-- Centralizes orchestration logic so you can build many different crews (issues, risks, actions) with the same building blocks
+4. **System Adaptability**
+   - The same agents can approach different documents differently
+   - The system can evolve without architectural changes
 
-### 🧩 **Modular Design**
-- Keeps agent logic clean and focused—each agent does its job, and the Planner tells them what that job is
+## Architecture Integration
 
-### 📐 **Adaptability**
-- Each analysis is customized per document and user intent without modifying agent internals
+The Planner sits between the Orchestrator and specialized agents:
 
-### 🚀 **LLM-Enhanced Planning**
-- Leverages LLMs to build dynamic task flows and guidance tailored to:
-  - Document type (transcript, report, etc.)
-  - Detail level (Essential → Comprehensive)
-  - Domain-specific focus areas (e.g., security, budget, quality)
+```
+Orchestrator → Planner → Specialized Agents
+```
 
----
+1. Orchestrator analyzes document and collects user preferences
+2. Planner creates document-specific instructions
+3. Instructions are distributed to specialized agents
+4. Agents execute with tailored guidance
 
-## Why It Matters in This App
+## Implementation Details
 
-The Planner is what makes **Better Notes** truly scalable and intelligent:
-- It enables **macro-chunking** of long-form transcripts (~50K+ tokens) and provides intelligent context for each crew
-- It separates **planning from doing**, allowing developers to create new assessment types without rewriting agent logic
-- It creates a foundation for more advanced capabilities like **agent collaboration**, **multi-document comparison**, and **chain-of-thought diagnostics**
+The PlannerAgent:
+- Inherits from BaseAgent with type="planner" and crew_type="meta"
+- Creates JSON-structured instructions for each agent
+- Includes fallback mechanisms if planning fails
+- Provides metadata about its planning decisions
 
----
+## Future Potential
 
-## Status
-
-🛠️ The Planner Agent is actively being developed and enhanced.
-- Future versions will include:
-  - More advanced role assignment logic
-  - Task graphs and dependencies
-  - Multi-modal planning (e.g., combining documents with user input)
-
----
+The Planner enables future capabilities like:
+- Multi-document analysis with cross-referencing instructions
+- Adaptive processing based on content complexity
+- Dynamic agent allocation depending on document needs
+- Learning from previous analyses to improve future planning
 
 ## Summary
 
-The Planner Agent is the intelligence layer that makes Better Notes modular, adaptive, and powerful. It transforms a static set of AI agents into a dynamic, document-aware crew that can flexibly respond to real-world content and goals.
-
-> It’s not just assigning roles—it’s designing how intelligence flows through the system.
+The Planner Agent represents the "brain" of Better Notes - it's what allows the system to think and adapt rather than just execute a fixed workflow. By separating planning from execution, Better Notes achieves both flexibility and specialization, making it capable of handling diverse document types with consistently high-quality results.
