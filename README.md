@@ -133,7 +133,7 @@ Assessment Crews are specialized teams of AI agents that work together through a
     </td>
     </tr>
     <tr>
-    <td colspan="2" align="center">
+    <td colspan="2" align="left">
     <h4> 🤝 Configurable Through JSON</h4>
     
 ```json
