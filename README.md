@@ -54,7 +54,7 @@ Better Notes implements four foundational patterns that level up AI applications
 </tr>
 <tr>
 <td colspan="2" align="center">
-<img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logic.svg" alt="Better-Notes Architecture" width="80%"/>
+<img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logo.svg" alt="Better-Notes logo" width="80%"/>
 </td>
 </tr>
 </table>

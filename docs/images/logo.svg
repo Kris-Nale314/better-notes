@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 140">
+  <!-- Hexagonal central hub representing the core agent platform -->
+  <polygon points="90,50 120,35 150,50 150,80 120,95 90,80" fill="#f0f4f8" stroke="#3b82f6" stroke-width="2.5"/>
+  
+  <!-- Document stack on left side - larger and centered vertically -->
+  <rect x="20" y="45" width="50" height="60" rx="3" fill="#f0f4f8" stroke="#3b82f6" stroke-width="2"/>
+  <rect x="25" y="40" width="50" height="60" rx="3" fill="#f0f4f8" stroke="#3b82f6" stroke-width="2"/>
+  <rect x="30" y="35" width="50" height="60" rx="3" fill="#f0f4f8" stroke="#3b82f6" stroke-width="2"/>
+  
+  <!-- Document lines -->
+  <line x1="40" y1="50" x2="70" y2="50" stroke="#3b82f6" stroke-width="1.5"/>
+  <line x1="40" y1="60" x2="70" y2="60" stroke="#3b82f6" stroke-width="1.5"/>
+  <line x1="40" y1="70" x2="70" y2="70" stroke="#3b82f6" stroke-width="1.5"/>
+  <line x1="40" y1="80" x2="60" y2="80" stroke="#3b82f6" stroke-width="1.5"/>
+  
+  <!-- Connection from documents to hub -->
+  <line x1="80" y1="65" x2="90" y2="65" stroke="#3b82f6" stroke-width="2.5"/>
+  
+  <!-- Agent nodes inside hexagon -->
+  <circle cx="105" cy="55" r="8" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+  <circle cx="120" cy="65" r="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <circle cx="135" cy="55" r="8" fill="#dcfce7" stroke="#059669" stroke-width="1.5"/>
+  <circle cx="105" cy="75" r="8" fill="#f3e8ff" stroke="#7c3aed" stroke-width="1.5"/>
+  <circle cx="135" cy="75" r="8" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  
+  <!-- Connection lines between agent nodes -->
+  <line x1="105" y1="55" x2="120" y2="65" stroke="#3b82f6" stroke-width="1"/>
+  <line x1="120" y1="65" x2="135" y2="55" stroke="#3b82f6" stroke-width="1"/>
+  <line x1="105" y1="55" x2="105" y2="75" stroke="#3b82f6" stroke-width="1"/>
+  <line x1="135" y1="55" x2="135" y2="75" stroke="#3b82f6" stroke-width="1"/>
+  <line x1="105" y1="75" x2="120" y2="65" stroke="#3b82f6" stroke-width="1"/>
+  <line x1="120" y1="65" x2="135" y2="75" stroke="#3b82f6" stroke-width="1"/>
+  <line x1="105" y1="75" x2="135" y2="75" stroke="#3b82f6" stroke-width="1"/>
+  
+  <!-- Output document on right side - smaller by 25% -->
+  <path d="M182.5 42.5 L217.5 42.5 L217.5 87.5 L182.5 87.5 Z" fill="#f0f4f8" stroke="#3b82f6" stroke-width="2"/>
+  
+  <!-- Document lines with checkmarks -->
+  <line x1="187.5" y1="55" x2="212.5" y2="55" stroke="#4ade80" stroke-width="1.5"/>
+  <polyline points="190,53 192,55 195,50" fill="none" stroke="#16a34a" stroke-width="1.5"/>
+  
+  <line x1="187.5" y1="65" x2="212.5" y2="65" stroke="#4ade80" stroke-width="1.5"/>
+  <polyline points="190,63 192,65 195,60" fill="none" stroke="#16a34a" stroke-width="1.5"/>
+  
+  <line x1="187.5" y1="75" x2="212.5" y2="75" stroke="#4ade80" stroke-width="1.5"/>
+  <polyline points="190,73 192,75 195,70" fill="none" stroke="#16a34a" stroke-width="1.5"/>
+  
+  <!-- Connection from hub to output document -->
+  <line x1="150" y1="65" x2="182.5" y2="65" stroke="#3b82f6" stroke-width="2.5"/>
+  
+  <!-- Text - moved lower -->
+  <text x="120" y="125" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="16" fill="#1e3a8a">Better-Notes</text>
+</svg>
