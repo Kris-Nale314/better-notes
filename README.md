@@ -5,6 +5,15 @@
 
 ## ✨ Overview
 
+</td>
+</tr>
+<tr>
+<td colspan="2" align="center">
+<img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logo.svg" alt="Better-Notes logo" width="30%"/>
+</td>
+</tr>
+</table>
+
 **Better Notes** is a modular, multi-agent system for analyzing documents up to 100k tokens to extract insights, identify issues, and organize information. Unlike basic summarizers, it uses specialized AI agents orchestrated by a Planner to create deeper, more structured analysis.
 
 Think of it as a team of AI analysts working together on your document:
@@ -54,7 +63,7 @@ Better Notes implements four foundational patterns that level up AI applications
 </tr>
 <tr>
 <td colspan="2" align="center">
-<img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logo.svg" alt="Better-Notes logo" width="80%"/>
+<img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logic.svg" alt="Better-Notes Logic" width="80%"/>
 </td>
 </tr>
 </table>

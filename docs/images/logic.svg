@@ -1,113 +1,109 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 950 600">
-  <rect width="950" height="600" fill="#f8f9fa" rx="5" ry="5"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600">
+  <rect width="900" height="600" fill="#f8fafc" rx="5"/>
 
-  <text x="475" y="40" font-family="Tenorite, Arial" font-size="24" text-anchor="middle" font-weight="bold" fill="#343a40">Better Notes System Architecture</text>
+  <rect x="50" y="60" width="150" height="80" rx="5" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="2"/>
+  <text x="125" y="105" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="16" fill="#0c4a6e">Document Upload</text>
 
-  <rect x="50" y="100" width="120" height="60" rx="5" ry="5" fill="#4e8cff" stroke="#2970ff" stroke-width="2"/>
-  <text x="110" y="135" font-family="Tenorite, Arial" font-size="14" text-anchor="middle" fill="white">👤 User</text>
+  <rect x="50" y="150" width="150" height="80" rx="5" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="2"/>
+  <text x="125" y="185" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="16" fill="#0c4a6e">Macro-Chunking</text>
+  <text x="125" y="205" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#0c4a6e">(10k tokens)</text>
 
-  <rect x="220" y="100" width="120" height="60" rx="5" ry="5" fill="#4e8cff" stroke="#2970ff" stroke-width="2"/>
-  <text x="280" y="135" font-family="Tenorite, Arial" font-size="14" text-anchor="middle" fill="white">📄 Document</text>
+  <rect x="50" y="240" width="150" height="80" rx="5" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+  <text x="125" y="275" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="16" fill="#9a3412">Config Selection</text>
+  <text x="125" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#9a3412">(Issues, Actions, etc.)</text>
 
-  <rect x="580" y="80" width="340" height="140" rx="5" ry="5" fill="#f1f3f5" stroke="#ced4da" stroke-width="2"/>
-  <text x="750" y="105" font-family="Tenorite, Arial" font-size="16" text-anchor="middle" fill="#495057">Document Processing</text>
+  <rect x="50" y="330" width="150" height="80" rx="5" fill="#fdf4ff" stroke="#c026d3" stroke-width="2"/>
+  <text x="125" y="365" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="16" fill="#86198f">User Context</text>
+  <text x="125" y="385" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#86198f">(Instructions, Preferences)</text>
 
-  <rect x="600" y="120" width="120" height="40" rx="5" ry="5" fill="#74b9ff" stroke="#0984e3" stroke-width="2"/>
-  <text x="660" y="145" font-family="Tenorite, Arial" font-size="12" text-anchor="middle" fill="white">Document Chunker</text>
+  <line x1="200" y1="100" x2="275" y2="170" stroke="#64748b" stroke-width="2"/>
+  <polygon points="270,165 275,170 265,170" fill="#64748b"/>
 
-  <rect x="780" y="120" width="120" height="40" rx="5" ry="5" fill="#74b9ff" stroke="#0984e3" stroke-width="2"/>
-  <text x="840" y="145" font-family="Tenorite, Arial" font-size="12" text-anchor="middle" fill="white">Document Analyzer</text>
+  <line x1="200" y1="190" x2="275" y2="190" stroke="#64748b" stroke-width="2"/>
+  <polygon points="270,185 275,190 270,195" fill="#64748b"/>
 
-  <rect x="780" y="170" width="120" height="40" rx="5" ry="5" fill="#74b9ff" stroke="#0984e3" stroke-width="2"/>
-  <text x="840" y="195" font-family="Tenorite, Arial" font-size="12" text-anchor="middle" fill="white">Parallel Booster</text>
+  <line x1="200" y1="280" x2="275" y2="210" stroke="#64748b" stroke-width="2"/>
+  <polygon points="270,215 275,210 267,205" fill="#64748b"/>
 
-  <rect x="600" y="170" width="120" height="40" rx="5" ry="5" fill="#a3b1c6" stroke="#8395a7" stroke-width="2"/>
-  <text x="660" y="195" font-family="Tenorite, Arial" font-size="12" text-anchor="middle" fill="white">Async LLM Adapter</text>
+  <line x1="200" y1="370" x2="275" y2="230" stroke="#64748b" stroke-width="2"/>
+  <polygon points="270,235 275,230 265,225" fill="#64748b"/>
 
-  <rect x="350" y="120" width="200" height="90" rx="5" ry="5" fill="#6c5ce7" stroke="#5541d6" stroke-width="2"/>
-  <text x="450" y="160" font-family="Tenorite, Arial" font-size="18" text-anchor="middle" fill="white">Orchestrator</text>
-  <text x="450" y="185" font-family="Tenorite, Arial" font-size="12" text-anchor="middle" fill="white">Coordinates All Processing &amp; Agents</text>
+  <rect x="275" y="120" width="200" height="200" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="3"/>
+  <text x="375" y="145" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="18" fill="#92400e">Planner</text>
 
-  <rect x="280" y="250" width="400" height="230" rx="5" ry="5" fill="#f1f3f5" stroke="#ced4da" stroke-width="2"/>
-  <text x="480" y="275" font-family="Tenorite, Arial" font-size="16" text-anchor="middle" fill="#495057">Agent System</text>
+  <rect x="295" y="165" width="160" height="25" rx="3" fill="#fef9c3" stroke="#a16207" stroke-width="1"/>
+  <text x="375" y="182" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#854d0e">Analysis Strategy Design</text>
 
-  <rect x="300" y="295" width="360" height="40" rx="5" ry="5" fill="#a3b1c6" stroke="#8395a7" stroke-width="2"/>
-  <text x="480" y="320" font-family="Tenorite, Arial" font-size="12" text-anchor="middle" fill="white">Base Agent (Configuration-driven)</text>
+  <rect x="295" y="200" width="160" height="25" rx="3" fill="#fef9c3" stroke="#a16207" stroke-width="1"/>
+  <text x="375" y="217" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#854d0e">Agent Selection</text>
 
-  <rect x="300" y="345" width="80" height="40" rx="5" ry="5" fill="#ff7675" stroke="#e84393" stroke-width="2"/>
-  <text x="340" y="370" font-family="Tenorite, Arial" font-size="12" text-anchor="middle" fill="white">Extractor</text>
+  <rect x="295" y="235" width="160" height="25" rx="3" fill="#fef9c3" stroke="#a16207" stroke-width="1"/>
+  <text x="375" y="252" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#854d0e">Task Definition</text>
 
-  <rect x="390" y="345" width="80" height="40" rx="5" ry="5" fill="#ff7675" stroke="#e84393" stroke-width="2"/>
-  <text x="430" y="370" font-family="Tenorite, Arial" font-size="12" text-anchor="middle" fill="white">Aggregator</text>
+  <rect x="295" y="270" width="160" height="25" rx="3" fill="#fef9c3" stroke="#a16207" stroke-width="1"/>
+  <text x="375" y="287" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#854d0e">Execution Planning</text>
 
-  <rect x="480" y="345" width="80" height="40" rx="5" ry="5" fill="#ff7675" stroke="#e84393" stroke-width="2"/>
-  <text x="520" y="370" font-family="Tenorite, Arial" font-size="12" text-anchor="middle" fill="white">Evaluator</text>
+  <rect x="530" y="80" width="320" height="280" rx="8" fill="#f8fafc" stroke="#64748b" stroke-width="2.5"/>
+  <text x="690" y="105" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="18" fill="#475569">Configurable Assessment Crew</text>
 
-  <rect x="570" y="345" width="80" height="40" rx="5" ry="5" fill="#ff7675" stroke="#e84393" stroke-width="2"/>
-  <text x="610" y="370" font-family="Tenorite, Arial" font-size="12" text-anchor="middle" fill="white">Formatter</text>
+  <circle cx="590" cy="160" r="40" fill="#dcfce7" stroke="#059669" stroke-width="2"/>
+  <text x="590" y="155" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="14" fill="#065f46">Extractor</text>
+  <text x="590" y="175" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#065f46">Agent</text>
 
-  <rect x="300" y="395" width="360" height="75" rx="5" ry="5" fill="#f8f9fa" stroke="#dee2e6" stroke-width="2"/>
-  <text x="480" y="415" font-family="Tenorite, Arial" font-size="14" text-anchor="middle" fill="#343a40">Issues Crew Example</text>
+  <circle cx="690" cy="160" r="40" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="690" y="155" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="14" fill="#1e40af">Aggregator</text>
+  <text x="690" y="175" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#1e40af">Agent</text>
 
-  <text x="340" y="445" font-family="Tenorite, Arial" font-size="12" text-anchor="middle" fill="#343a40">Extractor</text>
-  <text x="340" y="460" font-family="Tenorite, Arial" font-size="10" text-anchor="middle" fill="#343a40">Finds Issues</text>
+  <circle cx="790" cy="160" r="40" fill="#f3e8ff" stroke="#7c3aed" stroke-width="2"/>
+  <text x="790" y="155" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="14" fill="#5b21b6">Evaluator</text>
+  <text x="790" y="175" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#5b21b6">Agent</text>
 
-  <text x="430" y="445" font-family="Tenorite, Arial" font-size="12" text-anchor="middle" fill="#343a40">Aggregator</text>
-  <text x="430" y="460" font-family="Tenorite, Arial" font-size="10" text-anchor="middle" fill="#343a40">Deduplicates</text>
+  <circle cx="590" cy="280" r="40" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+  <text x="590" y="275" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="14" fill="#991b1b">Formatter</text>
+  <text x="590" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#991b1b">Agent</text>
 
-  <text x="520" y="445" font-family="Tenorite, Arial" font-size="12" text-anchor="middle" fill="#343a40">Evaluator</text>
-  <text x="520" y="460" font-family="Tenorite, Arial" font-size="10" text-anchor="middle" fill="#343a40">Prioritizes</text>
+  <circle cx="790" cy="280" r="40" fill="#fae8ff" stroke="#c026d3" stroke-width="2"/>
+  <text x="790" y="275" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="14" fill="#86198f">Reviewer</text>
+  <text x="790" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#86198f">Agent</text>
 
-  <text x="610" y="445" font-family="Tenorite, Arial" font-size="12" text-anchor="middle" fill="#343a40">Formatter</text>
-  <text x="610" y="460" font-family="Tenorite, Arial" font-size="10" text-anchor="middle" fill="#343a40">Reports</text>
+  <line x1="630" y1="160" x2="650" y2="160" stroke="#64748b" stroke-width="1.5"/>
+  <line x1="730" y1="160" x2="750" y2="160" stroke="#64748b" stroke-width="1.5"/>
+  <line x1="790" y1="200" x2="790" y2="240" stroke="#64748b" stroke-width="1.5"/>
+  <line x1="630" y1="280" x2="750" y2="280" stroke="#64748b" stroke-width="1.5"/>
+  <path d="M 590 200 C 590 220, 590 240, 590 240" fill="none" stroke="#64748b" stroke-width="1.5"/>
+  <path d="M 690 200 C 690 240, 630 280, 630 280" fill="none" stroke="#64748b" stroke-width="1.5"/>
+  <path d="M 750 160 C 850 160, 850 280, 830 280" fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="5,3"/>
 
-  <rect x="735" y="300" width="180" height="60" rx="5" ry="5" fill="#00b894" stroke="#00a884" stroke-width="2"/>
-  <text x="825" y="335" font-family="Tenorite, Arial" font-size="14" text-anchor="middle" fill="white">📊 Analysis Report</text>
-  <text x="825" y="355" font-family="Tenorite, Arial" font-size="12" text-anchor="middle" fill="white">By Severity &amp; Category</text>
+  <path d="M 475 210 C 500 210, 510 210, 530 210" fill="none" stroke="#64748b" stroke-width="3"/>
+  <polygon points="525,205 530,210 525,215" fill="#64748b"/>
 
-  <rect x="735" y="400" width="180" height="60" rx="5" ry="5" fill="#6c5ce7" stroke="#5541d6" stroke-width="2"/>
-  <text x="825" y="435" font-family="Tenorite, Arial" font-size="14" text-anchor="middle" fill="white">💬 Analysis Chat</text>
-  <text x="825" y="455" font-family="Tenorite, Arial" font-size="12" text-anchor="middle" fill="white">Assistant</text>
+  <rect x="590" y="410" width="200" height="100" rx="8" fill="#f1f5f9" stroke="#475569" stroke-width="2.5"/>
+  <text x="690" y="440" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="18" fill="#334155">Assessment Report</text>
+  <text x="690" y="470" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#334155">Structured Analysis</text>
+  <text x="690" y="490" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#334155">with Metadata</text>
 
-  <line x1="170" y1="130" x2="220" y2="130" stroke="#343a40" stroke-width="2"/>
-  <polygon points="215,125 220,130 215,135" fill="#343a40"/>
+  <rect x="235" y="410" width="270" height="130" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="2.5"/>
+  <text x="370" y="435" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="18" fill="#1e40af">Post-Assessment Features</text>
 
-  <line x1="340" y1="130" x2="350" y2="130" stroke="#343a40" stroke-width="2"/>
-  <polygon points="345,125 350,130 345,135" fill="#343a40"/>
+  <rect x="255" y="450" width="230" height="25" rx="3" fill="#bfdbfe" stroke="#2563eb" stroke-width="1"/>
+  <text x="370" y="467" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" fill="#1e40af">Chat with Transcript</text>
 
-  <line x1="550" y1="165" x2="580" y2="165" stroke="#343a40" stroke-width="2"/>
-  <polygon points="575,160 580,165 575,170" fill="#343a40"/>
+  <rect x="255" y="480" width="230" height="25" rx="3" fill="#bfdbfe" stroke="#2563eb" stroke-width="1"/>
+  <text x="370" y="497" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" fill="#1e40af">Refine Analysis</text>
 
-  <line x1="450" y1="210" x2="450" y2="250" stroke="#343a40" stroke-width="2"/>
-  <polygon points="445,245 450,250 455,245" fill="#343a40"/>
+  <rect x="255" y="510" width="230" height="25" rx="3" fill="#bfdbfe" stroke="#2563eb" stroke-width="1"/>
+  <text x="370" y="527" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" fill="#1e40af">Add Instructions &amp; Rerun</text>
 
-  <line x1="680" y1="330" x2="735" y2="330" stroke="#343a40" stroke-width="2"/>
-  <polygon points="730,325 735,330 730,335" fill="#343a40"/>
+  <line x1="690" y1="360" x2="690" y2="410" stroke="#64748b" stroke-width="2.5"/>
+  <polygon points="695,405 690,410 685,405" fill="#64748b"/>
 
-  <line x1="680" y1="430" x2="735" y2="430" stroke="#343a40" stroke-width="2"/>
-  <polygon points="730,425 735,430 730,435" fill="#343a40"/>
+  <path d="M 370 410 L 370 320" fill="none" stroke="#64748b" stroke-width="2.5"/>
+  <polygon points="365,325 370,320 375,325" fill="#64748b"/>
 
-  <line x1="735" y1="410" x2="700" y2="410" stroke="#343a40" stroke-width="1" stroke-dasharray="5,5"/>
-  <line x1="700" y1="410" x2="700" y2="370" stroke="#343a40" stroke-width="1" stroke-dasharray="5,5"/>
-  <line x1="700" y1="370" x2="670" y2="370" stroke="#343a40" stroke-width="1" stroke-dasharray="5,5"/>
-  <polygon points="675,365 670,370 675,375" fill="#343a40"/>
+  <path d="M 590 460 L 505 460" fill="none" stroke="#64748b" stroke-width="2"/>
+  <polygon points="510,465 505,460 510,455" fill="#64748b"/>
 
-  <line x1="650" y1="220" x2="650" y2="230" stroke="#343a40" stroke-width="1" stroke-dasharray="5,5"/>
-  <line x1="650" y1="230" x2="450" y2="230" stroke="#343a40" stroke-width="1" stroke-dasharray="5,5"/>
-  <polygon points="455,225 450,230 455,235" fill="#343a40"/>
+  <path d="M 505 485 L 590 485" fill="none" stroke="#64748b" stroke-width="2"/>
+  <polygon points="585,490 590,485 585,480" fill="#64748b"/>
 
-  <rect x="50" y="520" width="120" height="70" fill="#f8f9fa"/>
-  <text x="90" y="535" font-family="Tenorite, Arial" font-size="12" text-anchor="middle" font-weight="bold" fill="#343a40">Legend</text>
-
-  <rect x="60" y="545" width="15" height="10" fill="#6c5ce7" stroke="#5541d6" stroke-width="1"/>
-  <text x="110" y="553" font-family="Tenorite, Arial" font-size="10" text-anchor="start" fill="#343a40">Core</text>
-
-  <rect x="60" y="560" width="15" height="10" fill="#74b9ff" stroke="#0984e3" stroke-width="1"/>
-  <text x="110" y="568" font-family="Tenorite, Arial" font-size="10" text-anchor="start" fill="#343a40">Processing</text>
-
-  <rect x="60" y="575" width="15" height="10" fill="#ff7675" stroke="#e84393" stroke-width="1"/>
-  <text x="110" y="583" font-family="Tenorite, Arial" font-size="10" text-anchor="start" fill="#343a40">Agents</text>
-
-  <rect x="60" y="590" width="15" height="10" fill="#00b894" stroke="#00a884" stroke-width="1"/>
-  <text x="110" y="598" font-family="Tenorite, Arial" font-size="10" text-anchor="start" fill="#343a40">Output</text>
-</svg>
+  </svg>
