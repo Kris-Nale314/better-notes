@@ -42,7 +42,7 @@
 </table>
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logic.svg" alt="Better-Notes Logic" width="80%"/>
+  <img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logic.svg" alt="Better-Notes Logic" width="95%"/>
   <em>The Planner Agent creates a tailored approach for each document, coordinating specialized agents that extract, process, and organize information</em>
 </div>
 
