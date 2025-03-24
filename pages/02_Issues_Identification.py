@@ -1,48 +1,42 @@
 """
 Issues Identification Page - Better Notes
 Identifies problems, challenges, and risks in documents using the Planner-driven agent architecture.
-Updated to properly integrate with ConfigManager and UniversalLLMAdapter.
+Completely integrated with UniversalLLMAdapter, simplified ConfigManager, and IssuesCrew.
 """
 
 import os
+import sys
 import time
-import streamlit as st
+import logging
+import json
+import traceback
 from pathlib import Path
 import tempfile
-import json
-import datetime
-import traceback
-import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
+
+import streamlit as st
 
 # Import core components with proper error handling
-try:
-    from universal_llm_adapter import UniversalLLMAdapter
-    from config_manager import ConfigManager, ProcessingOptions
-    from orchestrator_factory import OrchestratorFactory
-except ImportError as e:
-    st.error(f"Could not import required components: {str(e)}")
-    st.stop()
+from universal_llm_adapter import UniversalLLMAdapter
+from config_manager import ConfigManager
+from orchestrator_factory import OrchestratorFactory
 
 # Import UI utilities
-try:
-    from ui_utils.core_styling import apply_component_styles, apply_analysis_styles
-    from ui_utils.result_formatting import enhance_result_display, create_download_button
-    from ui_utils.chat_interface import display_chat_interface
-    from ui_utils.progress_tracking import ProgressTracker
-except ImportError as e:
-    st.warning(f"Could not import UI utilities: {str(e)}. Using basic styling.")
-    # Define fallback styling functions
-    def apply_component_styles(): pass
-    def apply_analysis_styles(style): pass
-    def enhance_result_display(text, style, level): return f"<div>{text}</div>"
-    def create_download_button(content, filename): st.download_button("Download", content, filename)
-    def display_chat_interface(**kwargs): st.info("Chat interface not available")
-    ProgressTracker = None
+from ui_utils.core_styling import apply_component_styles, apply_analysis_styles
+from ui_utils.result_formatting import enhance_result_display, create_download_button
+from ui_utils.chat_interface import display_chat_interface
+from ui_utils.progress_tracking import create_progress_callback
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# Configure logging to both console and file
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler("issues_analysis.log", mode="a")
+    ]
+)
+logger = logging.getLogger("issues_identification")
 
 # Configure page
 st.set_page_config(
@@ -67,8 +61,6 @@ if "agent_result" not in st.session_state:
     st.session_state.agent_result = None
 if "processing_time" not in st.session_state:
     st.session_state.processing_time = 0
-if "agent_logs" not in st.session_state:
-    st.session_state.agent_logs = []
 if "document_info" not in st.session_state:
     st.session_state.document_info = None
 if "document_text" not in st.session_state:
@@ -175,6 +167,7 @@ with upload_tab:
                 )
         except Exception as e:
             st.error(f"Error reading file: {str(e)}")
+            logger.error(f"File upload error: {str(e)}")
         finally:
             try:
                 os.unlink(tmp_path)
@@ -221,15 +214,69 @@ process_button = st.button(
     use_container_width=True
 )
 
+# Helper function to extract HTML content
+def extract_html_content(result: Any) -> str:
+    """
+    Extract HTML content from different result formats.
+    
+    Args:
+        result: Result object (dict, string, or other)
+        
+    Returns:
+        HTML string or formatted string representation
+    """
+    # If result is a string, check if it's HTML-like
+    if isinstance(result, str):
+        if ("<html" in result.lower() or "<div" in result.lower() or 
+            "<h1" in result.lower() or "<p>" in result.lower()):
+            return result
+    
+    # If result is a dict, try to find HTML content
+    if isinstance(result, dict):
+        # Check for formatted_report field
+        if "formatted_report" in result and isinstance(result["formatted_report"], str):
+            return result["formatted_report"]
+        
+        # Look for HTML in any string field
+        for key, value in result.items():
+            if isinstance(value, str) and ("<html" in value.lower() or "<div" in value.lower()):
+                return value
+    
+    # If no HTML found, convert to string representation
+    if isinstance(result, dict):
+        try:
+            return json.dumps(result, indent=2)
+        except:
+            return str(result)
+    
+    return str(result)
+
 # Function to save output to file
-def save_output_to_file(content: str) -> str:
-    """Save analysis output to the outputs folder with a timestamp."""
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+def save_output_to_file(content: Any) -> str:
+    """
+    Save analysis output to the outputs folder with a timestamp.
+    Handles different content types.
+    
+    Args:
+        content: Content to save (string, dict, or other)
+        
+    Returns:
+        Path to saved file
+    """
+    # Extract HTML content if needed
+    if not isinstance(content, str):
+        content_str = extract_html_content(content)
+    else:
+        content_str = content
+    
+    # Generate filename with timestamp
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
     filename = f"issues_{timestamp}.html"
     filepath = OUTPUT_DIR / "issues" / filename
     
+    # Save to file
     with open(filepath, "w", encoding="utf-8") as f:
-        f.write(content)
+        f.write(content_str)
     
     return str(filepath)
 
@@ -242,12 +289,12 @@ def process_document():
         st.error("OpenAI API key not found! Please set the OPENAI_API_KEY environment variable.")
         return
     
-    # Create a config manager
-    config_manager = ConfigManager()
+    logger.info(f"Starting issues analysis with model: {selected_model}")
     
-    # Create a single progress display area using placeholders
-    progress_placeholder = st.empty()
-    status_text_placeholder = st.empty()
+    # Create progress placeholders
+    progress_container = st.container()
+    progress_placeholder = progress_container.empty()
+    status_text_placeholder = progress_container.empty()
     
     # Create stage indicators using columns and placeholders
     stages = ["Planning", "Extraction", "Aggregation", "Evaluation", "Formatting"]
@@ -386,7 +433,21 @@ def process_document():
         # Calculate chunk size
         max_chunk_size = (len(document_text) // num_chunks) + 100
         
-        # Directly create the orchestrator with base parameters
+        # Initialize UniversalLLMAdapter
+        llm_client = UniversalLLMAdapter(
+            api_key=api_key,
+            model=selected_model,
+            temperature=temperature
+        )
+        
+        # Store LLM client for chat interface
+        st.session_state.llm_client = llm_client
+        
+        # Create a config manager
+        config_manager = ConfigManager()
+        
+        # Create orchestrator directly
+        logger.info("Creating orchestrator")
         orchestrator = OrchestratorFactory.create_orchestrator(
             api_key=api_key,
             model=selected_model,
@@ -397,17 +458,7 @@ def process_document():
             config_manager=config_manager
         )
         
-        # Initialize UniversalLLMAdapter for chat feature
-        llm_client = UniversalLLMAdapter(
-            api_key=api_key,
-            model=selected_model,
-            temperature=temperature
-        )
-        
-        # Store LLM client for chat interface
-        st.session_state.llm_client = llm_client
-        
-        # Create processing options dictionary
+        # Create processing options
         options = {
             "model_name": selected_model,
             "temperature": temperature,
@@ -421,6 +472,7 @@ def process_document():
             "user_instructions": user_instructions
         }
         
+        logger.info("Starting document processing")
         # Process document with progress tracking
         result = orchestrator.process_document(
             document_text,
@@ -468,6 +520,10 @@ def process_document():
         if log_placeholder:
             log_placeholder.empty()
         
+        # Log the error
+        logger.error(f"Error processing document: {str(e)}")
+        logger.error(traceback.format_exc())
+        
         # Display error
         st.error(f"Error processing document: {str(e)}")
         
@@ -478,47 +534,11 @@ def process_document():
         st.session_state.processing_complete = False
         st.session_state.agent_result = {"error": str(e)}
 
-# Function to display results with improved handling of different result formats
+# Function to display results
 def display_results(result, processing_time):
     """Display the processing results with improved result handling."""
     # Extract the HTML content or formatted result
-    result_text = ""
-    
-    try:
-        # Handle different result structures
-        if isinstance(result, dict):
-            if "raw_output" in result:
-                result_text = result["raw_output"]
-            elif "formatted_result" in result:
-                result_text = result["formatted_result"]
-            # Look for HTML content in any string field
-            else:
-                for key, value in result.items():
-                    if isinstance(value, str) and value.startswith("<"):
-                        result_text = value
-                        break
-                
-                # If no HTML found, check for content in review_result
-                if not result_text and "review_result" in result:
-                    review_result = result["review_result"]
-                    if isinstance(review_result, dict) and "content" in review_result:
-                        result_text = review_result["content"]
-        elif isinstance(result, str):
-            result_text = result
-    except Exception as e:
-        st.warning(f"Error extracting result content: {str(e)}")
-        if debug_mode:
-            st.code(traceback.format_exc())
-    
-    # If we still don't have content, convert result to string
-    if not result_text and result:
-        try:
-            if isinstance(result, dict):
-                result_text = json.dumps(result, indent=2)
-            else:
-                result_text = str(result)
-        except Exception as e:
-            st.warning(f"Error converting result to string: {str(e)}")
+    result_text = extract_html_content(result)
     
     # Handle error results
     if isinstance(result, dict) and "error" in result:
@@ -722,15 +742,16 @@ def display_results(result, processing_time):
         if isinstance(result, dict) and "_metadata" in result:
             metadata = result["_metadata"]
             # Remove plan and document_info to avoid duplication
-            if "plan" in metadata:
-                del metadata["plan"]
-            if "document_info" in metadata:
-                del metadata["document_info"]
+            metadata_copy = metadata.copy()
+            if "plan" in metadata_copy:
+                del metadata_copy["plan"]
+            if "document_info" in metadata_copy:
+                del metadata_copy["document_info"]
                 
-            if metadata:
+            if metadata_copy:
                 st.markdown("### Processing Metadata")
                 with st.expander("Processing Stats", expanded=False):
-                    st.json(metadata)
+                    st.json(metadata_copy)
 
 # Run when process button is clicked
 if process_button:

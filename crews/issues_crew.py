@@ -1,6 +1,6 @@
 """
 Enhanced Issues Crew - Specialized crew for identifying issues in documents.
-Uses the updated architecture with UniversalLLMAdapter and ConfigManager.
+Streamlined implementation that works with UniversalLLMAdapter and modern agent architecture.
 """
 
 import logging
@@ -8,7 +8,6 @@ import time
 import asyncio
 import json
 import os
-import traceback
 from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime
 
@@ -23,18 +22,20 @@ from agents.evaluator import EvaluatorAgent
 from agents.formatter import FormatterAgent
 from agents.reviewer import ReviewerAgent
 
+# Import document processing components
+from lean.chunker import DocumentChunker
+
 logger = logging.getLogger(__name__)
 
 class IssuesCrew:
     """
     Specialized crew for identifying, evaluating, and reporting issues in documents.
-    Updated to work with the new architecture.
+    Simplified implementation focusing on reliability.
     """
     
     def __init__(
         self, 
         llm_client, 
-        config_path=None, 
         verbose=True, 
         max_chunk_size=1500,
         max_rpm=10
@@ -44,7 +45,6 @@ class IssuesCrew:
         
         Args:
             llm_client: Universal LLM adapter or compatible client
-            config_path: Optional path to config file
             verbose: Whether to enable verbose logging
             max_chunk_size: Maximum chunk size for document processing
             max_rpm: Maximum requests per minute
@@ -63,7 +63,13 @@ class IssuesCrew:
         self.config_manager = ConfigManager()
         
         # Load configuration
-        self.config = self._load_config(config_path)
+        self.config = self.config_manager.get_config("issues")
+        if not self.config:
+            logger.warning("Issues configuration not found. Using default configuration.")
+            self.config = self._get_default_config()
+        
+        # Create document chunker
+        self.chunker = DocumentChunker()
         
         # Track process state
         self.process_state = {"status": "initialized", "stages": {}, "errors": []}
@@ -71,50 +77,60 @@ class IssuesCrew:
         self.run_id = None
         
         # Initialize specialized agents
-        self.extractor_agent = ExtractorAgent(
-            llm_client=self.llm_client,
-            crew_type="issues",
-            config=self.config,
-            verbose=verbose,
-            max_chunk_size=max_chunk_size,
-            max_rpm=max_rpm
-        )
-        
-        self.aggregator_agent = AggregatorAgent(
-            llm_client=self.llm_client,
-            crew_type="issues", 
-            config=self.config,
-            verbose=verbose,
-            max_chunk_size=max_chunk_size,
-            max_rpm=max_rpm
-        )
-        
-        self.evaluator_agent = EvaluatorAgent(
-            llm_client=self.llm_client,
-            crew_type="issues",
-            config=self.config,
-            verbose=verbose,
-            max_chunk_size=max_chunk_size,
-            max_rpm=max_rpm
-        )
-        
-        self.formatter_agent = FormatterAgent(
-            llm_client=self.llm_client,
-            crew_type="issues",
-            config=self.config,
-            verbose=verbose,
-            max_chunk_size=max_chunk_size,
-            max_rpm=max_rpm
-        )
-        
-        self.reviewer_agent = ReviewerAgent(
-            llm_client=self.llm_client,
-            crew_type="issues",
-            config=self.config,
-            verbose=verbose,
-            max_chunk_size=max_chunk_size,
-            max_rpm=max_rpm
-        )
+        self._init_agents()
+    
+    def _init_agents(self):
+        """Initialize all agents needed for the crew."""
+        try:
+            self.extractor_agent = ExtractorAgent(
+                llm_client=self.llm_client,
+                crew_type="issues",
+                config=self.config,
+                verbose=self.verbose,
+                max_chunk_size=self.max_chunk_size,
+                max_rpm=self.max_rpm
+            )
+            
+            self.aggregator_agent = AggregatorAgent(
+                llm_client=self.llm_client,
+                crew_type="issues", 
+                config=self.config,
+                verbose=self.verbose,
+                max_chunk_size=self.max_chunk_size,
+                max_rpm=self.max_rpm
+            )
+            
+            self.evaluator_agent = EvaluatorAgent(
+                llm_client=self.llm_client,
+                crew_type="issues",
+                config=self.config,
+                verbose=self.verbose,
+                max_chunk_size=self.max_chunk_size,
+                max_rpm=self.max_rpm
+            )
+            
+            self.formatter_agent = FormatterAgent(
+                llm_client=self.llm_client,
+                crew_type="issues",
+                config=self.config,
+                verbose=self.verbose,
+                max_chunk_size=self.max_chunk_size,
+                max_rpm=self.max_rpm
+            )
+            
+            self.reviewer_agent = ReviewerAgent(
+                llm_client=self.llm_client,
+                crew_type="issues",
+                config=self.config,
+                verbose=self.verbose,
+                max_chunk_size=self.max_chunk_size,
+                max_rpm=self.max_rpm
+            )
+            
+            logger.info("All agents initialized successfully")
+        except Exception as e:
+            logger.error(f"Error initializing agents: {e}")
+            raise
     
     def update_rpm(self, new_rpm: int) -> None:
         """Update the maximum requests per minute for all agents."""
@@ -124,26 +140,58 @@ class IssuesCrew:
         for agent_name in ["extractor_agent", "aggregator_agent", 
                           "evaluator_agent", "formatter_agent", "reviewer_agent"]:
             agent = getattr(self, agent_name)
-            if hasattr(agent, "agent") and hasattr(agent.agent, "max_rpm"):
-                agent.agent.max_rpm = new_rpm
+            agent.max_rpm = new_rpm
     
-    def _load_config(self, config_path=None):
-        """Load the configuration file using ConfigManager."""
-        if config_path:
-            try:
-                with open(config_path, 'r') as f:
-                    config = json.load(f)
-                    logger.info(f"Loaded configuration from {config_path}")
-                    return config
-            except (FileNotFoundError, json.JSONDecodeError) as e:
-                logger.error(f"Error loading config from {config_path}: {str(e)}")
-        
-        # Use ConfigManager to load the config
-        return self.config_manager.get_config("issues")
+    def _get_default_config(self) -> Dict[str, Any]:
+        """Get default configuration for issues analysis."""
+        return {
+            "metadata": {
+                "version": "1.0",
+                "description": "Default issues identification configuration"
+            },
+            "analysis_definition": {
+                "issue": {
+                    "definition": "Any problem, challenge, risk, or concern that may impact objectives, efficiency, or quality"
+                },
+                "severity_levels": {
+                    "critical": "Immediate threat to operations, security, or compliance; blocks major deliverables",
+                    "high": "Significant impact on effectiveness or efficiency; requires attention soon",
+                    "medium": "Causes inefficiency or limitations; should be addressed",
+                    "low": "Minor concern with minimal impact; could be addressed through regular improvements"
+                }
+            },
+            "agents": {
+                "extractor": {
+                    "role": "Issue Extractor",
+                    "goal": "Identify potential issues in document chunks",
+                    "instructions": "Analyze the document to identify issues, problems, and challenges."
+                },
+                "aggregator": {
+                    "role": "Issue Aggregator",
+                    "goal": "Combine and deduplicate issues from multiple extractions",
+                    "instructions": "Combine similar issues while preserving important distinctions."
+                },
+                "evaluator": {
+                    "role": "Issue Evaluator",
+                    "goal": "Assess severity and impact of identified issues",
+                    "instructions": "Evaluate each issue for severity, impact, and priority."
+                },
+                "formatter": {
+                    "role": "Report Formatter",
+                    "goal": "Create a clear, structured report of issues",
+                    "instructions": "Format the issues into a well-organized report grouped by severity."
+                },
+                "reviewer": {
+                    "role": "Analysis Reviewer",
+                    "goal": "Ensure analysis quality and alignment with user needs",
+                    "instructions": "Review the report for quality, consistency, and completeness."
+                }
+            }
+        }
     
     def process_document(
         self, 
-        document_text_or_chunks,
+        document_text,
         document_info: Optional[Dict[str, Any]] = None, 
         user_preferences: Optional[Dict[str, Any]] = None, 
         max_chunk_size: Optional[int] = None,
@@ -152,10 +200,10 @@ class IssuesCrew:
         progress_callback: Optional[Callable] = None
     ) -> Dict[str, Any]:
         """
-        Process a document to identify issues with improved progress reporting.
+        Process a document to identify issues.
         
         Args:
-            document_text_or_chunks: Document text or pre-chunked document
+            document_text: Document text
             document_info: Document metadata
             user_preferences: User preferences
             max_chunk_size: Maximum chunk size
@@ -184,20 +232,26 @@ class IssuesCrew:
         if max_chunk_size is not None:
             self.max_chunk_size = max_chunk_size
         
+        # Ensure we have user preferences
+        if user_preferences is None:
+            user_preferences = {}
+        
         try:
             # Stage 1: Prepare document and chunks
             self._start_stage("document_preparation")
             if progress_callback:
                 progress_callback(0.05, "Preparing document...")
             
-            chunks, chunk_metadata = self._prepare_document(
-                document_text_or_chunks, 
-                document_info, 
-                user_preferences,
-                min_chunks
-            )
+            # Ensure document_text is a string
+            if not isinstance(document_text, str):
+                document_text = str(document_text)
             
-            self.process_state["document_length"] = len(document_text_or_chunks) if isinstance(document_text_or_chunks, str) else sum(len(c) for c in document_text_or_chunks)
+            # Chunk the document
+            chunks = self._chunk_document(document_text, min_chunks)
+            chunk_metadata = [{"index": i, "position": f"chunk_{i}"} for i in range(len(chunks))]
+            
+            # Update state
+            self.process_state["document_length"] = len(document_text)
             self.process_state["chunk_count"] = len(chunks)
             self._complete_stage("document_preparation")
             
@@ -215,14 +269,6 @@ class IssuesCrew:
                 progress_callback(0.15, "Extracting issues from document...")
             
             extraction_results = self._extract_from_chunks(chunks, chunk_metadata, document_info, progress_callback)
-            
-            # Store extraction metadata
-            self.process_state["stages"]["extraction"]["results"] = {
-                "chunk_count": len(chunks),
-                "successful_chunks": sum(1 for r in extraction_results if isinstance(r, dict) and "error" not in r),
-                "issue_count": sum(len(r.get("issues", [])) for r in extraction_results if isinstance(r, dict) and "issues" in r)
-            }
-            
             self._complete_stage("extraction")
             
             # Stage 4: Aggregation
@@ -260,8 +306,8 @@ class IssuesCrew:
                 
                 # Combine formatted result with review
                 final_result = {
-                    "raw_output": formatted_result,
-                    "review_result": review_result,
+                    "formatted_report": formatted_result,
+                    "review_result": review_result
                 }
                 self._complete_stage("review")
             
@@ -277,25 +323,24 @@ class IssuesCrew:
                 progress_callback(1.0, f"Analysis complete")
             
             # Add metadata
-            if isinstance(final_result, dict):
-                final_result["_metadata"] = {
-                    "run_id": self.run_id,
-                    "duration": duration,
-                    "document_info": document_info if document_info else {},
-                    "processing_stats": self.process_state
-                }
+            final_result["_metadata"] = {
+                "run_id": self.run_id,
+                "duration": duration,
+                "document_info": document_info if document_info else {},
+                "processing_stats": self.process_state,
+                "user_preferences": user_preferences
+            }
             
             return final_result
             
         except Exception as e:
             self._fail_stage(self.process_state.get("current_stage", "unknown"), str(e))
-            logger.error(f"Error in issues analysis: {str(e)}", exc_info=True)
+            logger.error(f"Error in issues analysis: {e}")
             if progress_callback:
                 progress_callback(1.0, f"Error: {str(e)}")
             
             return {
                 "error": str(e),
-                "traceback": traceback.format_exc(),
                 "_metadata": {
                     "status": "error",
                     "run_id": self.run_id,
@@ -304,86 +349,42 @@ class IssuesCrew:
                 }
             }
     
-    def _prepare_document(
-        self, 
-        document_text_or_chunks, 
-        document_info, 
-        user_preferences,
-        min_chunks
-    ):
-        """Prepare document by chunking or using provided chunks."""
-        chunk_metadata = []
+    def _chunk_document(self, document_text: str, min_chunks: int) -> List[str]:
+        """
+        Chunk document text using DocumentChunker.
         
-        if isinstance(document_text_or_chunks, str):
-            # We have full text - chunk it
-            try:
-                from lean.chunker import DocumentChunker
-                chunker = DocumentChunker()
-            except ImportError:
-                try:
-                    from chunker import DocumentChunker
-                    chunker = DocumentChunker()
-                except ImportError:
-                    logger.error("Could not import DocumentChunker")
-                    # Fallback to simple chunking
-                    return self._simple_chunk_text(document_text_or_chunks, min_chunks), chunk_metadata
+        Args:
+            document_text: Document text
+            min_chunks: Minimum number of chunks
             
+        Returns:
+            List of text chunks
+        """
+        try:
             # Calculate appropriate chunk size
             if self.max_chunk_size is None:
-                doc_length = len(document_text_or_chunks)
-                calculated_chunk_size = doc_length // min_chunks
-                self.max_chunk_size = min(calculated_chunk_size + 100, 16000)
+                doc_length = len(document_text)
+                max_chunk_size = doc_length // min_chunks
+                self.max_chunk_size = min(max_chunk_size + 100, 16000)
             
-            try:
-                chunk_objects = chunker.chunk_document(
-                    document_text_or_chunks,
-                    min_chunks=min_chunks,
-                    max_chunk_size=self.max_chunk_size
-                )
-                
-                # Extract text and metadata
-                chunks = []
-                for chunk in chunk_objects:
-                    chunks.append(chunk["text"])
-                    chunk_metadata.append({
-                        "position": chunk.get("position", ""),
-                        "chunk_type": chunk.get("chunk_type", ""),
-                        "index": chunk.get("index", 0)
-                    })
-            except Exception as e:
-                logger.error(f"Error in document chunking: {e}")
-                # Fallback to simple chunking
-                return self._simple_chunk_text(document_text_or_chunks, min_chunks), chunk_metadata
+            # Use the chunker
+            chunk_objects = self.chunker.chunk_document(
+                document_text,
+                min_chunks=min_chunks,
+                max_chunk_size=self.max_chunk_size
+            )
             
-            # Analyze document if needed
-            if not document_info:
-                try:
-                    from lean.document import DocumentAnalyzer
-                    analyzer = DocumentAnalyzer(self.llm_client)
-                    document_info = asyncio.run(analyzer.analyze_preview(document_text_or_chunks))
-                    document_info["original_text_length"] = len(document_text_or_chunks)
-                except Exception as e:
-                    logger.warning(f"Document analysis failed: {e}")
-                    # Create basic document_info
-                    document_info = {
-                        "original_text_length": len(document_text_or_chunks),
-                        "basic_stats": {
-                            "word_count": len(document_text_or_chunks.split()),
-                            "char_count": len(document_text_or_chunks)
-                        }
-                    }
-        
-        elif isinstance(document_text_or_chunks, list):
-            # We already have chunks
-            chunks = document_text_or_chunks
-            chunk_metadata = [{"index": i} for i in range(len(chunks))]
-        else:
-            raise TypeError("Expected either a string or a list of chunks")
-        
-        return chunks, chunk_metadata
+            # Extract text from chunk objects
+            chunks = [chunk["text"] for chunk in chunk_objects]
+            
+            return chunks
+        except Exception as e:
+            logger.error(f"Error chunking document: {e}")
+            # Fallback to simple chunking
+            return self._simple_chunk_text(document_text, min_chunks)
     
-    def _simple_chunk_text(self, text, min_chunks):
-        """Simple fallback chunking for when DocumentChunker is unavailable."""
+    def _simple_chunk_text(self, text: str, min_chunks: int) -> List[str]:
+        """Simple fallback chunking for when DocumentChunker fails."""
         chunk_size = len(text) // min_chunks
         chunks = []
         
@@ -395,8 +396,13 @@ class IssuesCrew:
             
         return chunks
     
-    def _apply_agent_instructions(self, custom_instructions):
-        """Apply custom instructions to agents."""
+    def _apply_agent_instructions(self, custom_instructions: Dict[str, Any]) -> None:
+        """
+        Apply custom instructions to agents.
+        
+        Args:
+            custom_instructions: Custom instructions by agent type
+        """
         for agent_type, instructions in custom_instructions.items():
             # Map agent type to agent attribute
             agent_map = {
@@ -416,9 +422,15 @@ class IssuesCrew:
                 if self.verbose:
                     logger.info(f"Applied custom instructions to {agent_type} agent")
     
-    def _extract_from_chunks(self, chunks, chunk_metadata, document_info, progress_callback):
+    def _extract_from_chunks(
+        self, 
+        chunks: List[str], 
+        chunk_metadata: List[Dict[str, Any]], 
+        document_info: Optional[Dict[str, Any]],
+        progress_callback: Optional[Callable]
+    ) -> List[Dict[str, Any]]:
         """
-        Extract issues from chunks with improved progress reporting.
+        Extract issues from chunks sequentially.
         
         Args:
             chunks: Document chunks
@@ -429,174 +441,270 @@ class IssuesCrew:
         Returns:
             Extraction results
         """
-        async def extract_all_chunks():
-            # Set up concurrency control
-            max_concurrency = min(len(chunks), 10)
-            semaphore = asyncio.Semaphore(max_concurrency)
-            
-            async def process_chunk(idx):
-                async with semaphore:
-                    chunk = chunks[idx]
-                    metadata = chunk_metadata[idx] if idx < len(chunk_metadata) else {}
-                    
-                    # Calculate progress for this chunk within the extraction phase
-                    # Extraction is from 0.15 to 0.55 of total progress
-                    chunk_progress = 0.15 + (0.4 * (idx / len(chunks)))
-                    
-                    # Only log at verbose level - don't send to UI
-                    if self.verbose:
-                        logger.info(f"Processing chunk {idx+1}/{len(chunks)}")
-                    
-                    # Only update progress every few chunks to avoid UI spam
-                    if progress_callback and idx % max(1, len(chunks)//5) == 0:
-                        progress_callback(chunk_progress, f"Extracting issues ({idx+1}/{len(chunks)} chunks)")
-                    
-                    try:
-                        # Extract issues from this chunk
-                        extraction_context = {
-                            "document_chunk": chunk,
-                            "document_info": document_info,
-                            "chunk_metadata": metadata
-                        }
-                        
-                        # Execute the task with robust error handling
-                        start_time = time.time()
-                        result = self.extractor_agent.execute_task(context=extraction_context)
-                        duration = time.time() - start_time
-                        
-                        # Validate result format 
-                        if isinstance(result, str):
-                            try:
-                                # Try to parse as JSON
-                                result = json.loads(result)
-                            except json.JSONDecodeError:
-                                # Keep as string for later handling
-                                pass
-                        
-                        # Add processing metadata if result is a dict
-                        if isinstance(result, dict):
-                            result["_metadata"] = {
-                                "chunk_index": idx,
-                                "processing_time": duration,
-                                "timestamp": datetime.now().isoformat()
-                            }
-                        
-                        return result
-                    except Exception as e:
-                        logger.error(f"Error processing chunk {idx}: {str(e)}")
-                        return {
-                            "error": str(e), 
-                            "chunk_index": idx,
-                            "_metadata": {
-                                "error": True,
-                                "timestamp": datetime.now().isoformat()
-                            }
-                        }
-            
-            # Create tasks for all chunks
-            tasks = [process_chunk(i) for i in range(len(chunks))]
-            
-            # Execute all tasks
-            results = await asyncio.gather(*tasks)
-            
-            # Sort results by chunk index
-            return sorted(results, key=lambda r: r.get("_metadata", {}).get("chunk_index", 0) if isinstance(r, dict) else 0)
+        results = []
+        extraction_progress_range = (0.15, 0.55)  # Progress range for extraction phase
+        progress_per_chunk = (extraction_progress_range[1] - extraction_progress_range[0]) / len(chunks)
         
-        # Run the extraction process
-        try:
-            # Check if there's an event loop
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_closed():
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                
-            return loop.run_until_complete(extract_all_chunks())
-        except Exception as e:
-            logger.error(f"Error in parallel extraction: {str(e)}")
+        for i, chunk in enumerate(chunks):
+            # Calculate progress for this chunk
             if progress_callback:
-                progress_callback(0.4, f"Error in extraction: {str(e)}")
-            raise
+                chunk_progress = extraction_progress_range[0] + (i * progress_per_chunk)
+                progress_callback(chunk_progress, f"Extracting issues from chunk {i+1}/{len(chunks)}")
+            
+            # Get metadata for this chunk
+            metadata = chunk_metadata[i] if i < len(chunk_metadata) else {"index": i}
+            
+            try:
+                # Extract issues from this chunk
+                extraction_context = {
+                    "document_chunk": chunk,
+                    "document_info": document_info or {},
+                    "chunk_metadata": metadata
+                }
+                
+                # Execute the extraction task
+                start_time = time.time()
+                result = self.extractor_agent.execute_task(context=extraction_context)
+                duration = time.time() - start_time
+                
+                # Parse result if it's a string
+                if isinstance(result, str):
+                    try:
+                        # Try to parse as JSON
+                        result = self._parse_json_safely(result)
+                    except:
+                        # Keep as string if parsing fails
+                        result = {"issues": [{"description": result, "chunk_index": i}]}
+                
+                # Add metadata if result is a dict
+                if isinstance(result, dict):
+                    result["_metadata"] = {
+                        "chunk_index": i,
+                        "processing_time": duration,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                
+                # Add to results
+                results.append(result)
+                
+            except Exception as e:
+                logger.error(f"Error processing chunk {i}: {e}")
+                results.append({
+                    "error": str(e), 
+                    "chunk_index": i,
+                    "_metadata": {
+                        "error": True,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                })
+        
+        return results
     
-    def _aggregate_results(self, extraction_results, document_info):
-        """Aggregate extraction results."""
-        try:
-            # Build context for aggregation
-            context = {
-                "extraction_results": extraction_results,
-                "document_info": document_info or {}
-            }
+    def _aggregate_results(
+        self, 
+        extraction_results: List[Dict[str, Any]], 
+        document_info: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Aggregate extraction results.
+        
+        Args:
+            extraction_results: List of extraction results
+            document_info: Document metadata
             
-            # Calculate stats for prompt context
-            successful_extractions = sum(1 for r in extraction_results if isinstance(r, dict) and "error" not in r)
-            total_issues = sum(len(r.get("issues", [])) for r in extraction_results 
-                             if isinstance(r, dict) and "issues" in r)
-            
-            context["extraction_stats"] = {
-                "total_chunks": len(extraction_results),
-                "successful_chunks": successful_extractions,
-                "total_issues": total_issues
-            }
-            
-            # Execute aggregation
-            result = self.aggregator_agent.execute_task(context=context)
-            return result
-        except Exception as e:
-            logger.error(f"Error in aggregation: {str(e)}")
-            raise
+        Returns:
+            Aggregated results
+        """
+        # Build context for aggregation
+        context = {
+            "extraction_results": extraction_results,
+            "document_info": document_info or {}
+        }
+        
+        # Calculate stats for prompt context
+        successful_extractions = sum(1 for r in extraction_results if isinstance(r, dict) and "error" not in r)
+        total_issues = sum(len(r.get("issues", [])) for r in extraction_results 
+                         if isinstance(r, dict) and "issues" in r)
+        
+        context["extraction_stats"] = {
+            "total_chunks": len(extraction_results),
+            "successful_chunks": successful_extractions,
+            "total_issues": total_issues
+        }
+        
+        # Execute aggregation
+        result = self.aggregator_agent.execute_task(context=context)
+        
+        # Parse result if it's a string
+        if isinstance(result, str):
+            try:
+                result = self._parse_json_safely(result)
+            except:
+                # If parsing fails, wrap in basic structure
+                result = {
+                    "aggregated_issues": [{"description": result}]
+                }
+        
+        return result
     
-    def _evaluate_results(self, aggregated_result, document_info):
-        """Evaluate aggregated results."""
-        try:
-            # Build context for evaluation
-            context = {
-                "aggregated_result": aggregated_result,
-                "document_info": document_info or {}
-            }
+    def _evaluate_results(
+        self, 
+        aggregated_result: Dict[str, Any], 
+        document_info: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Evaluate aggregated results.
+        
+        Args:
+            aggregated_result: Aggregated results
+            document_info: Document metadata
             
-            # Execute evaluation
-            result = self.evaluator_agent.execute_task(context=context)
-            return result
-        except Exception as e:
-            logger.error(f"Error in evaluation: {str(e)}")
-            raise
+        Returns:
+            Evaluated results
+        """
+        # Build context for evaluation
+        context = {
+            "aggregated_result": aggregated_result,
+            "document_info": document_info or {}
+        }
+        
+        # Execute evaluation
+        result = self.evaluator_agent.execute_task(context=context)
+        
+        # Parse result if it's a string
+        if isinstance(result, str):
+            try:
+                result = self._parse_json_safely(result)
+            except:
+                # If parsing fails, wrap in basic structure
+                result = {
+                    "evaluated_issues": [{"description": result}]
+                }
+        
+        return result
     
-    def _format_results(self, evaluated_result, document_info, user_preferences):
-        """Format evaluated results."""
-        try:
-            # Build context for formatting
-            context = {
-                "evaluated_result": evaluated_result,
-                "document_info": document_info or {},
-                "user_preferences": user_preferences or {}
-            }
+    def _format_results(
+        self, 
+        evaluated_result: Dict[str, Any], 
+        document_info: Optional[Dict[str, Any]], 
+        user_preferences: Dict[str, Any]
+    ) -> str:
+        """
+        Format evaluated results into a report.
+        
+        Args:
+            evaluated_result: Evaluated results
+            document_info: Document metadata
+            user_preferences: User preferences
             
-            # Execute formatting
-            result = self.formatter_agent.execute_task(context=context)
-            return result
-        except Exception as e:
-            logger.error(f"Error in formatting: {str(e)}")
-            raise
+        Returns:
+            Formatted report (HTML string)
+        """
+        # Build context for formatting
+        context = {
+            "evaluated_result": evaluated_result,
+            "document_info": document_info or {},
+            "user_preferences": user_preferences or {}
+        }
+        
+        # Execute formatting
+        result = self.formatter_agent.execute_task(context=context)
+        
+        # Ensure result is a string (HTML)
+        if not isinstance(result, str):
+            if isinstance(result, dict):
+                # Try to find HTML content in the result
+                for key, value in result.items():
+                    if isinstance(value, str) and value.startswith("<"):
+                        return value
+                
+                # If no HTML found, convert to JSON string
+                return json.dumps(result, indent=2)
+            else:
+                # Convert to string
+                return str(result)
+        
+        return result
     
-    def _review_results(self, formatted_result, document_info, user_preferences):
-        """Review formatted results."""
-        try:
-            # Build context for review
-            context = {
-                "formatted_result": formatted_result,
-                "document_info": document_info or {},
-                "user_preferences": user_preferences or {}
-            }
+    def _review_results(
+        self, 
+        formatted_result: str, 
+        document_info: Optional[Dict[str, Any]], 
+        user_preferences: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Review formatted results.
+        
+        Args:
+            formatted_result: Formatted results
+            document_info: Document metadata
+            user_preferences: User preferences
             
-            # Execute review
-            result = self.reviewer_agent.execute_task(context=context)
-            return result
-        except Exception as e:
-            logger.error(f"Error in review: {str(e)}")
-            raise
+        Returns:
+            Review results
+        """
+        # Build context for review
+        context = {
+            "formatted_result": formatted_result,
+            "document_info": document_info or {},
+            "user_preferences": user_preferences or {}
+        }
+        
+        # Execute review
+        result = self.reviewer_agent.execute_task(context=context)
+        
+        # Parse result if it's a string
+        if isinstance(result, str):
+            try:
+                result = self._parse_json_safely(result)
+            except:
+                # If parsing fails, create a basic review structure
+                result = {
+                    "meets_requirements": None,
+                    "summary": result,
+                    "assessment": {}
+                }
+        
+        return result
+    
+    def _parse_json_safely(self, text: str) -> Dict[str, Any]:
+        """
+        Parse JSON with fallbacks for common formats.
+        
+        Args:
+            text: Text to parse
+            
+        Returns:
+            Parsed JSON object
+        """
+        import re
+        
+        # Try direct parsing first
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+        
+        # Try to extract JSON from markdown code blocks
+        json_pattern = r"```(?:json)?\s*([\s\S]*?)\s*```"
+        match = re.search(json_pattern, text)
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except:
+                pass
+        
+        # Try to extract any JSON-like structure
+        try:
+            start = text.find('{')
+            end = text.rfind('}') + 1
+            if start >= 0 and end > start:
+                return json.loads(text[start:end])
+        except:
+            pass
+        
+        # Could not parse JSON, raise exception
+        raise ValueError("Failed to parse JSON from response")
     
     def _start_stage(self, stage_name: str) -> None:
         """Begin tracking a processing stage."""
