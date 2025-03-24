@@ -1,34 +1,53 @@
 """
 Result formatting module for Better Notes.
 Provides utilities for formatting and enhancing analysis output.
+Updated to properly handle different content types including dictionaries.
 """
 
 import streamlit as st
 import re
+import json
 from typing import Dict, Any, Optional, List, Union
 
-def enhance_result_display(result_text: str, analysis_type: str, detail_level: str = "standard") -> str:
+def enhance_result_display(result_text: Union[str, Dict, Any], analysis_type: str, detail_level: str = "standard") -> str:
     """
     Enhance the result text with styling and visual elements.
+    Handles string, dictionary, or other content types.
     
     Args:
-        result_text: Original result text (markdown or HTML)
+        result_text: Original result (string, dict, or other object)
         analysis_type: Type of analysis ("issues", "actions", "insights")
         detail_level: Level of detail ("essential", "standard", "comprehensive")
         
     Returns:
         HTML string with enhanced display
     """
+    # Convert dictionary to string if needed
+    if isinstance(result_text, dict):
+        try:
+            # Try to convert to JSON
+            result_str = json.dumps(result_text, indent=2)
+            # Wrap in pre tags for proper formatting
+            return f'<div class="rich-output-container"><pre>{result_str}</pre></div>'
+        except:
+            # If JSON conversion fails, use string representation
+            result_str = str(result_text)
+    elif not isinstance(result_text, str):
+        # Handle any non-string, non-dict objects
+        result_str = str(result_text)
+    else:
+        result_str = result_text
+    
     # Check if this is already HTML
-    if is_html_content(result_text):
-        return enhance_html_content(result_text, analysis_type)
+    if is_html_content(result_str):
+        return enhance_html_content(result_str, analysis_type)
     else:
         # Process as markdown
-        return enhance_markdown_content(result_text, analysis_type)
+        return enhance_markdown_content(result_str, analysis_type)
 
-def is_html_content(content: str) -> bool:
+def is_html_content(content: Any) -> bool:
     """
-    Determine if content is HTML.
+    Determine if content is HTML with improved error handling.
     
     Args:
         content: Content to check
@@ -36,12 +55,20 @@ def is_html_content(content: str) -> bool:
     Returns:
         Boolean indicating if content is HTML
     """
+    # Handle non-string content
+    if not isinstance(content, str):
+        return False
+        
     html_indicators = [
         "<html", "<div", "<h1", "<p>", "<table", 
         "class=", "<body", "<head", "<script", "<style"
     ]
     
-    return any(indicator in content.lower() for indicator in html_indicators)
+    try:
+        # Check if any HTML indicators are present
+        return any(indicator in content.lower() for indicator in html_indicators)
+    except AttributeError:
+        return False
 
 def enhance_html_content(html_content: str, analysis_type: str) -> str:
     """
@@ -77,6 +104,10 @@ def enhance_markdown_content(markdown_text: str, analysis_type: str) -> str:
     Returns:
         Enhanced HTML from markdown
     """
+    # Check if the text is valid for processing
+    if not markdown_text or not isinstance(markdown_text, str):
+        return f'<div class="rich-output-container">{str(markdown_text)}</div>'
+    
     # Add icons to headings
     enhanced_text = add_icons_to_headings(markdown_text, analysis_type)
     
@@ -315,20 +346,68 @@ def format_log_entries(log_entries: List[str]) -> str:
     
     return "\n".join(log_html)
 
-def create_download_button(content: str, filename: str, mime_type: str = "text/html"):
+def create_download_button(content: Any, filename: str, mime_type: str = "text/html"):
     """
-    Create a styled download button for content.
+    Create a styled download button for content with improved handling of content types.
     
     Args:
-        content: Content to download
+        content: Content to download (string, dict, or other object)
         filename: File name for download
         mime_type: MIME type of content
     """
+    # Convert content to string if not already
+    if isinstance(content, dict):
+        try:
+            content_str = json.dumps(content, indent=2)
+            # Use plain text mime type for JSON
+            mime_type = "text/plain"
+        except:
+            content_str = str(content)
+    elif not isinstance(content, str):
+        content_str = str(content)
+        mime_type = "text/plain"
+    else:
+        content_str = content
+    
     st.download_button(
         "📥 Download Report",
-        data=content,
+        data=content_str,
         file_name=filename,
         mime=mime_type,
         key=f"download_{filename}",
         help="Download the analysis report to your device"
     )
+
+def extract_html_content(result: Any) -> str:
+    """
+    Extract HTML content from different result formats.
+    
+    Args:
+        result: Result object (could be string, dict, or other)
+        
+    Returns:
+        HTML string or empty string if no HTML found
+    """
+    # Handle string directly
+    if isinstance(result, str):
+        if is_html_content(result):
+            return result
+        return ""
+    
+    # Handle dictionary
+    if isinstance(result, dict):
+        # Look for HTML content in any string field
+        for key, value in result.items():
+            if isinstance(value, str) and is_html_content(value):
+                return value
+                
+        # Check for specific keys
+        if "raw_output" in result and isinstance(result["raw_output"], str):
+            return result["raw_output"]
+        elif "formatted_result" in result and isinstance(result["formatted_result"], str):
+            return result["formatted_result"]
+        elif "content" in result and isinstance(result["content"], str):
+            return result["content"]
+            
+    # If no HTML found, return empty string
+    return ""

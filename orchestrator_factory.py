@@ -3,9 +3,8 @@ OrchestratorFactory - Creates properly configured orchestrator instances.
 Simplifies the creation and configuration of orchestrators.
 """
 
-import os
 import logging
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional
 
 from universal_llm_adapter import UniversalLLMAdapter
 from config_manager import ConfigManager, ProcessingOptions
@@ -43,53 +42,48 @@ class OrchestratorFactory:
         Returns:
             Configured orchestrator instance
         """
-        try:
-            # Create config manager if not provided
-            if not config_manager:
-                config_manager = ConfigManager()
-            
-            # Create or wrap LLM client
-            if not isinstance(llm_client, UniversalLLMAdapter) and llm_client is not None:
-                llm_client = UniversalLLMAdapter(
-                    llm_client=llm_client,
-                    api_key=api_key,
-                    model=model,
-                    temperature=temperature
-                )
-            elif llm_client is None:
-                llm_client = UniversalLLMAdapter(
-                    api_key=api_key,
-                    model=model,
-                    temperature=temperature
-                )
-            
-            # Create orchestrator
-            orchestrator = Orchestrator(
-                llm_client=llm_client,
-                verbose=verbose,
-                max_chunk_size=max_chunk_size,
-                max_rpm=max_rpm,
-                config_manager=config_manager
+        # Create or get config manager
+        if config_manager is None:
+            config_manager = ConfigManager()
+        
+        # Create or wrap LLM client
+        if llm_client is None:
+            llm_client = UniversalLLMAdapter(
+                api_key=api_key,
+                model=model,
+                temperature=temperature
             )
-            
-            return orchestrator
-            
-        except Exception as e:
-            logger.error(f"Error creating orchestrator: {e}")
-            raise
+        elif not isinstance(llm_client, UniversalLLMAdapter):
+            llm_client = UniversalLLMAdapter(
+                llm_client=llm_client,
+                api_key=api_key,
+                model=model,
+                temperature=temperature
+            )
+        
+        # Create orchestrator
+        orchestrator = Orchestrator(
+            llm_client=llm_client,
+            verbose=verbose,
+            max_chunk_size=max_chunk_size,
+            max_rpm=max_rpm,
+            config_manager=config_manager
+        )
+        
+        return orchestrator
     
     @staticmethod
     def create_from_options(
-        options: Union[ProcessingOptions, Dict[str, Any]],
+        options: Dict[str, Any],
         api_key: Optional[str] = None,
         llm_client = None,
         config_manager: Optional[ConfigManager] = None
     ) -> Orchestrator:
         """
-        Create an orchestrator from ProcessingOptions.
+        Create an orchestrator from options dictionary.
         
         Args:
-            options: Processing options or options dictionary
+            options: Options dictionary
             api_key: Optional API key
             llm_client: Optional LLM client
             config_manager: Optional config manager
@@ -97,19 +91,14 @@ class OrchestratorFactory:
         Returns:
             Configured orchestrator instance
         """
-        # Convert dictionary to ProcessingOptions if needed
-        if isinstance(options, dict):
-            if config_manager is None:
-                config_manager = ConfigManager()
-            options = config_manager.create_options_from_dict(options)
-        
+        # Create orchestrator with basic settings
         return OrchestratorFactory.create_orchestrator(
             api_key=api_key,
             llm_client=llm_client,
-            model=options.model_name,
-            temperature=options.temperature,
-            max_chunk_size=options.max_chunk_size,
-            max_rpm=options.max_rpm,
+            model=options.get("model_name", "gpt-3.5-turbo"),
+            temperature=options.get("temperature", 0.2),
+            max_chunk_size=options.get("max_chunk_size", 10000),
+            max_rpm=options.get("max_rpm", 10),
             verbose=True,
             config_manager=config_manager
         )
