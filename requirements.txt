@@ -1,4 +1,5 @@
 streamlit
+crewai
 openai
 python-dotenv
 tiktoken

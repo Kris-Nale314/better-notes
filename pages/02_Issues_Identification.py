@@ -1,6 +1,7 @@
 """
 Issues Identification Page - Better Notes
 Identifies problems, challenges, and risks in documents using the Planner-driven agent architecture.
+Updated to properly integrate with ConfigManager and UniversalLLMAdapter.
 """
 
 import os
@@ -14,14 +15,30 @@ import traceback
 import logging
 from typing import Dict, Any, Optional, List
 
-# Import orchestrator
-from orchestrator import OrchestratorFactory
+# Import core components with proper error handling
+try:
+    from universal_llm_adapter import UniversalLLMAdapter
+    from config_manager import ConfigManager, ProcessingOptions
+    from orchestrator_factory import OrchestratorFactory
+except ImportError as e:
+    st.error(f"Could not import required components: {str(e)}")
+    st.stop()
 
 # Import UI utilities
-from ui_utils.core_styling import apply_component_styles, apply_analysis_styles
-from ui_utils.result_formatting import enhance_result_display, create_download_button
-from ui_utils.chat_interface import display_chat_interface
-from ui_utils.progress_tracking import ProgressTracker, log_progress
+try:
+    from ui_utils.core_styling import apply_component_styles, apply_analysis_styles
+    from ui_utils.result_formatting import enhance_result_display, create_download_button
+    from ui_utils.chat_interface import display_chat_interface
+    from ui_utils.progress_tracking import ProgressTracker
+except ImportError as e:
+    st.warning(f"Could not import UI utilities: {str(e)}. Using basic styling.")
+    # Define fallback styling functions
+    def apply_component_styles(): pass
+    def apply_analysis_styles(style): pass
+    def enhance_result_display(text, style, level): return f"<div>{text}</div>"
+    def create_download_button(content, filename): st.download_button("Download", content, filename)
+    def display_chat_interface(**kwargs): st.info("Chat interface not available")
+    ProgressTracker = None
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -56,6 +73,8 @@ if "document_info" not in st.session_state:
     st.session_state.document_info = None
 if "document_text" not in st.session_state:
     st.session_state.document_text = ""
+if "llm_client" not in st.session_state:
+    st.session_state.llm_client = None
 
 # Main title and description
 st.title("⚠️ Issues Identification")
@@ -119,6 +138,12 @@ with st.sidebar.expander("Advanced Settings"):
         "Enable Review Step", 
         value=True,
         help="Final quality check of the analysis before delivery"
+    )
+    
+    debug_mode = st.checkbox(
+        "Debug Mode",
+        value=False,
+        help="Show raw outputs and intermediate results for troubleshooting"
     )
 
 # Document upload
@@ -217,8 +242,10 @@ def process_document():
         st.error("OpenAI API key not found! Please set the OPENAI_API_KEY environment variable.")
         return
     
+    # Create a config manager
+    config_manager = ConfigManager()
+    
     # Create a single progress display area using placeholders
-    # This is key - using placeholders that we can update in place
     progress_placeholder = st.empty()
     status_text_placeholder = st.empty()
     
@@ -267,7 +294,7 @@ def process_document():
         # Update progress bar
         progress_placeholder.progress(progress)
         
-        # Filter out chunk-level messages
+        # Filter out chunk-level messages for cleaner UI
         is_chunk_message = any(term in message.lower() for term in 
                               ['chunk', 'processing chunk', 'extracting from chunk'])
         
@@ -275,7 +302,7 @@ def process_document():
         if not is_chunk_message:
             status_text_placeholder.text(message)
         
-        # Update agent status based on progress
+        # Determine current stage based on progress value
         current_stage = None
         if progress <= 0.15:
             current_stage = "Planning"
@@ -299,7 +326,7 @@ def process_document():
             # Determine new status
             if stage == current_stage:
                 new_status = "working"
-            elif stages.index(stage) < stages.index(current_stage):
+            elif stages.index(stage) < stages.index(current_stage) if current_stage else False:
                 new_status = "complete"
                 
             # Only update if status changed
@@ -349,29 +376,6 @@ def process_document():
                 log_placeholder.markdown("\n".join(log_html), unsafe_allow_html=True)
     
     try:
-        # Calculate max_chunk_size based on document length and number of chunks
-        max_chunk_size = (len(document_text) // num_chunks) + 100  # Add buffer
-        
-        # Create orchestrator
-        orchestrator = OrchestratorFactory.create_orchestrator(
-            api_key=api_key,
-            model=selected_model,
-            temperature=temperature,
-            max_chunk_size=max_chunk_size,
-            verbose=show_agent_details,
-            max_rpm=max_rpm
-        )
-        
-        # Initialize LLM client for chat
-        from lean.async_openai_adapter import AsyncOpenAIAdapter
-        llm_client = AsyncOpenAIAdapter(
-            model=selected_model,
-            temperature=temperature
-        )
-        
-        # Store LLM client for chat interface
-        st.session_state.llm_client = llm_client
-        
         # Map UI detail level to config values
         detail_map = {
             "Essential": "essential",
@@ -379,30 +383,55 @@ def process_document():
             "Comprehensive": "comprehensive"
         }
         
-        # Set up user preferences
-        user_preferences = {
-            "detail_level": detail_map.get(detail_level, "standard"),
-            "focus_areas": focus_areas,
-            "max_chunk_size": max_chunk_size,
-            "user_instructions": user_instructions
-        }
+        # Calculate chunk size
+        max_chunk_size = (len(document_text) // num_chunks) + 100
         
-        # Set up processing options
+        # Directly create the orchestrator with base parameters
+        orchestrator = OrchestratorFactory.create_orchestrator(
+            api_key=api_key,
+            model=selected_model,
+            temperature=temperature,
+            max_chunk_size=max_chunk_size,
+            max_rpm=max_rpm,
+            verbose=show_agent_details,
+            config_manager=config_manager
+        )
+        
+        # Initialize UniversalLLMAdapter for chat feature
+        llm_client = UniversalLLMAdapter(
+            api_key=api_key,
+            model=selected_model,
+            temperature=temperature
+        )
+        
+        # Store LLM client for chat interface
+        st.session_state.llm_client = llm_client
+        
+        # Create processing options dictionary
         options = {
+            "model_name": selected_model,
+            "temperature": temperature,
             "crews": ["issues"],
             "min_chunks": num_chunks,
             "max_chunk_size": max_chunk_size,
             "max_rpm": max_rpm,
             "enable_reviewer": enable_reviewer,
-            "user_preferences": user_preferences
+            "detail_level": detail_map.get(detail_level, "standard"),
+            "focus_areas": [area.lower() for area in focus_areas],
+            "user_instructions": user_instructions
         }
         
-        # Process document
+        # Process document with progress tracking
         result = orchestrator.process_document(
             document_text,
             options=options,
             progress_callback=update_progress
         )
+        
+        # Show raw result in debug mode
+        if debug_mode:
+            with st.expander("Debug: Raw Result Structure", expanded=False):
+                st.json(result)
         
         # Store document info for chat
         if "issues" in result and isinstance(result["issues"], dict) and "_metadata" in result["issues"]:
@@ -410,7 +439,7 @@ def process_document():
             if "document_info" in metadata:
                 st.session_state.document_info = metadata["document_info"]
         
-        # Store results
+        # Store results in session state
         if "issues" in result:
             st.session_state.agent_result = result["issues"]
         else:
@@ -431,55 +460,81 @@ def process_document():
         display_results(st.session_state.agent_result, st.session_state.processing_time)
         
     except Exception as e:
-        # Display error
+        # Clear progress display
         progress_placeholder.empty()
         status_text_placeholder.empty()
         for indicator in stage_indicators:
             indicator["placeholder"].empty()
+        if log_placeholder:
+            log_placeholder.empty()
         
+        # Display error
         st.error(f"Error processing document: {str(e)}")
         
         with st.expander("Technical Error Details"):
             st.code(traceback.format_exc())
         
+        # Update session state
         st.session_state.processing_complete = False
         st.session_state.agent_result = {"error": str(e)}
 
-# Function to display results
+# Function to display results with improved handling of different result formats
 def display_results(result, processing_time):
-    """Display the processing results."""
-    # Handle different result formats
+    """Display the processing results with improved result handling."""
+    # Extract the HTML content or formatted result
     result_text = ""
-    if hasattr(result, 'raw_output'):
-        result_text = result.raw_output
-    elif hasattr(result, 'result'):
-        result_text = result.result
-    elif isinstance(result, dict) and "raw_output" in result:
-        result_text = result["raw_output"]
-    elif isinstance(result, str):
-        result_text = result
-    elif isinstance(result, dict) and "error" in result:
+    
+    try:
+        # Handle different result structures
+        if isinstance(result, dict):
+            if "raw_output" in result:
+                result_text = result["raw_output"]
+            elif "formatted_result" in result:
+                result_text = result["formatted_result"]
+            # Look for HTML content in any string field
+            else:
+                for key, value in result.items():
+                    if isinstance(value, str) and value.startswith("<"):
+                        result_text = value
+                        break
+                
+                # If no HTML found, check for content in review_result
+                if not result_text and "review_result" in result:
+                    review_result = result["review_result"]
+                    if isinstance(review_result, dict) and "content" in review_result:
+                        result_text = review_result["content"]
+        elif isinstance(result, str):
+            result_text = result
+    except Exception as e:
+        st.warning(f"Error extracting result content: {str(e)}")
+        if debug_mode:
+            st.code(traceback.format_exc())
+    
+    # If we still don't have content, convert result to string
+    if not result_text and result:
+        try:
+            if isinstance(result, dict):
+                result_text = json.dumps(result, indent=2)
+            else:
+                result_text = str(result)
+        except Exception as e:
+            st.warning(f"Error converting result to string: {str(e)}")
+    
+    # Handle error results
+    if isinstance(result, dict) and "error" in result:
         st.error(f"Error during processing: {result['error']}")
         return
-    else:
-        try:
-            result_text = str(result)
-        except Exception as e:
-            st.error(f"Error converting result to string: {str(e)}")
-            return
-    
-    # Extract review information if available
-    review_result = None
-    if hasattr(result, 'review_result'):
-        review_result = result.review_result
-    elif isinstance(result, dict) and "review_result" in result:
-        review_result = result["review_result"]
     
     # Save the result to a file
     saved_filepath = save_output_to_file(result_text)
     
     # Show success message
     st.success(f"Analysis completed in {processing_time:.2f} seconds")
+    
+    # Extract review information
+    review_result = None
+    if isinstance(result, dict) and "review_result" in result:
+        review_result = result["review_result"]
     
     # Create tabs for different views
     result_tabs = st.tabs(["Report", "Chat with Document", "Adjust Analysis", "Technical Info"])
@@ -489,16 +544,20 @@ def display_results(result, processing_time):
         
         # Add review feedback if available
         if review_result and isinstance(review_result, dict):
-            scores = review_result.get("assessment", {})
-            if scores:
-                # Show assessment scores in metrics
+            # Show assessment scores if available
+            assessment = review_result.get("assessment", {})
+            if assessment and isinstance(assessment, dict):
                 st.info("Analysis Quality Assessment")
-                metric_cols = st.columns(len(scores))
                 
-                for i, (key, value) in enumerate(scores.items()):
-                    # Format key from snake_case to title case
-                    display_key = key.replace("_score", "").replace("_", " ").title()
-                    metric_cols[i].metric(display_key, f"{value}/5")
+                # Count metrics to arrange in columns
+                metrics = [(k.replace("_score", "").replace("_", " ").title(), v) 
+                          for k, v in assessment.items() 
+                          if isinstance(v, (int, float))]
+                
+                if metrics:
+                    metric_cols = st.columns(len(metrics))
+                    for i, (key, value) in enumerate(metrics):
+                        metric_cols[i].metric(key, f"{value}/5")
                 
                 # Show summary assessment
                 if "summary" in review_result:
@@ -506,10 +565,12 @@ def display_results(result, processing_time):
                         st.markdown(f"**{review_result['summary']}**")
                         
                         # Show improvement suggestions if available
-                        if "improvement_suggestions" in review_result and review_result["improvement_suggestions"]:
+                        suggestions = review_result.get("improvement_suggestions", [])
+                        if suggestions and isinstance(suggestions, list):
                             st.markdown("### Improvement Suggestions")
-                            for suggestion in review_result["improvement_suggestions"]:
-                                st.markdown(f"- **{suggestion.get('area', 'General')}**: {suggestion.get('suggestion', '')}")
+                            for suggestion in suggestions:
+                                if isinstance(suggestion, dict):
+                                    st.markdown(f"- **{suggestion.get('area', 'General')}**: {suggestion.get('suggestion', '')}")
         
         # Display enhanced result
         enhanced_html = enhance_result_display(result_text, "issues", detail_level.lower())
@@ -612,7 +673,7 @@ def display_results(result, processing_time):
         
         # Document stats if available
         document_info = st.session_state.document_info
-        if document_info and "basic_stats" in document_info:
+        if document_info and isinstance(document_info, dict) and "basic_stats" in document_info:
             stats = document_info["basic_stats"]
             st.markdown("### Document Statistics")
             
@@ -656,6 +717,20 @@ def display_results(result, processing_time):
             st.markdown("### Agent Plan")
             with st.expander("Planner-Generated Instructions", expanded=False):
                 st.json(result["_metadata"]["plan"])
+        
+        # Additional metadata
+        if isinstance(result, dict) and "_metadata" in result:
+            metadata = result["_metadata"]
+            # Remove plan and document_info to avoid duplication
+            if "plan" in metadata:
+                del metadata["plan"]
+            if "document_info" in metadata:
+                del metadata["document_info"]
+                
+            if metadata:
+                st.markdown("### Processing Metadata")
+                with st.expander("Processing Stats", expanded=False):
+                    st.json(metadata)
 
 # Run when process button is clicked
 if process_button:

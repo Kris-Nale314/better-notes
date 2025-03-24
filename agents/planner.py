@@ -42,6 +42,14 @@ class PlannerAgent(BaseAgent):
     ) -> Dict[str, Dict[str, str]]:
         """
         Create tailored instructions for each agent in a crew.
+        
+        Args:
+            document_info: Document metadata
+            user_preferences: User preferences
+            crew_type: Type of crew
+            
+        Returns:
+            Plan dictionary with instructions for each agent
         """
         start_time = datetime.now()
         
@@ -110,7 +118,8 @@ class PlannerAgent(BaseAgent):
     def _get_agent_role_definitions(self, crew_type: str) -> str:
         """Get agent role definitions based on crew type from configuration."""
         # Get the agents section from config
-        agents_config = self.config.get("agents", {})
+        crew_config = self.config_manager.get_config(crew_type)
+        agents_config = crew_config.get("agents", {})
         
         # Build role definitions string from config
         roles = []
@@ -119,6 +128,26 @@ class PlannerAgent(BaseAgent):
             goal = config.get("goal", f"Process {crew_type}")
             
             roles.append(f"{agent_type.upper()} AGENT: {role}\n  Goal: {goal}")
+        
+        if not roles:
+            # If no roles defined in config, use default roles
+            return self._get_default_role_definitions(crew_type)
+            
+        return "\n\n".join(roles)
+    
+    def _get_default_role_definitions(self, crew_type: str) -> str:
+        """Get default role definitions when not available in config."""
+        default_roles = {
+            "extraction": f"{crew_type.title()} Extractor - Identifies items in document chunks",
+            "aggregation": f"{crew_type.title()} Aggregator - Combines and deduplicates items",
+            "evaluation": f"{crew_type.title()} Evaluator - Assesses importance and impact",
+            "formatting": "Report Formatter - Creates clear, structured reports",
+            "reviewer": "Analysis Reviewer - Ensures quality and alignment with user needs"
+        }
+        
+        roles = []
+        for agent_type, role in default_roles.items():
+            roles.append(f"{agent_type.upper()} AGENT: {role}")
         
         return "\n\n".join(roles)
     

@@ -1,19 +1,22 @@
 """
 Enhanced Issues Crew - Specialized crew for identifying issues in documents.
-Uses the Planner Agent for optimized instructions and provides streamlined progress reporting.
+Uses the updated architecture with UniversalLLMAdapter and ConfigManager.
 """
 
-from typing import Dict, Any, List, Optional, Union, Callable
+import logging
+import time
 import asyncio
 import json
-import logging
 import os
-import time
 import traceback
+from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime
 
-# Import agents
-from agents.planner import PlannerAgent
+# Import our universal adapter and config manager
+from universal_llm_adapter import UniversalLLMAdapter
+from config_manager import ConfigManager
+
+# Import agent components
 from agents.extractor import ExtractorAgent
 from agents.aggregator import AggregatorAgent
 from agents.evaluator import EvaluatorAgent
@@ -25,7 +28,7 @@ logger = logging.getLogger(__name__)
 class IssuesCrew:
     """
     Specialized crew for identifying, evaluating, and reporting issues in documents.
-    Provides streamlined progress reporting focused on agent stages.
+    Updated to work with the new architecture.
     """
     
     def __init__(
@@ -36,11 +39,28 @@ class IssuesCrew:
         max_chunk_size=1500,
         max_rpm=10
     ):
-        """Initialize the Issues Identification crew."""
-        self.llm_client = llm_client
+        """
+        Initialize the Issues Identification crew.
+        
+        Args:
+            llm_client: Universal LLM adapter or compatible client
+            config_path: Optional path to config file
+            verbose: Whether to enable verbose logging
+            max_chunk_size: Maximum chunk size for document processing
+            max_rpm: Maximum requests per minute
+        """
+        # Ensure we have a UniversalLLMAdapter
+        if not isinstance(llm_client, UniversalLLMAdapter):
+            self.llm_client = UniversalLLMAdapter(llm_client=llm_client)
+        else:
+            self.llm_client = llm_client
+            
         self.verbose = verbose
         self.max_chunk_size = max_chunk_size
         self.max_rpm = max_rpm
+        
+        # Create config manager
+        self.config_manager = ConfigManager()
         
         # Load configuration
         self.config = self._load_config(config_path)
@@ -52,7 +72,7 @@ class IssuesCrew:
         
         # Initialize specialized agents
         self.extractor_agent = ExtractorAgent(
-            llm_client=llm_client,
+            llm_client=self.llm_client,
             crew_type="issues",
             config=self.config,
             verbose=verbose,
@@ -61,7 +81,7 @@ class IssuesCrew:
         )
         
         self.aggregator_agent = AggregatorAgent(
-            llm_client=llm_client,
+            llm_client=self.llm_client,
             crew_type="issues", 
             config=self.config,
             verbose=verbose,
@@ -70,7 +90,7 @@ class IssuesCrew:
         )
         
         self.evaluator_agent = EvaluatorAgent(
-            llm_client=llm_client,
+            llm_client=self.llm_client,
             crew_type="issues",
             config=self.config,
             verbose=verbose,
@@ -79,7 +99,7 @@ class IssuesCrew:
         )
         
         self.formatter_agent = FormatterAgent(
-            llm_client=llm_client,
+            llm_client=self.llm_client,
             crew_type="issues",
             config=self.config,
             verbose=verbose,
@@ -88,7 +108,7 @@ class IssuesCrew:
         )
         
         self.reviewer_agent = ReviewerAgent(
-            llm_client=llm_client,
+            llm_client=self.llm_client,
             crew_type="issues",
             config=self.config,
             verbose=verbose,
@@ -108,21 +128,18 @@ class IssuesCrew:
                 agent.agent.max_rpm = new_rpm
     
     def _load_config(self, config_path=None):
-        """Load the configuration file."""
-        if not config_path:
-            config_path = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)),
-                "agents", "config", "issues_config.json"
-            )
+        """Load the configuration file using ConfigManager."""
+        if config_path:
+            try:
+                with open(config_path, 'r') as f:
+                    config = json.load(f)
+                    logger.info(f"Loaded configuration from {config_path}")
+                    return config
+            except (FileNotFoundError, json.JSONDecodeError) as e:
+                logger.error(f"Error loading config from {config_path}: {str(e)}")
         
-        try:
-            with open(config_path, 'r') as f:
-                config = json.load(f)
-                logger.info(f"Loaded configuration from {config_path}")
-                return config
-        except (FileNotFoundError, json.JSONDecodeError) as e:
-            logger.error(f"Error loading config: {str(e)}")
-            return {}
+        # Use ConfigManager to load the config
+        return self.config_manager.get_config("issues")
     
     def process_document(
         self, 
@@ -299,8 +316,17 @@ class IssuesCrew:
         
         if isinstance(document_text_or_chunks, str):
             # We have full text - chunk it
-            from lean.chunker import DocumentChunker
-            chunker = DocumentChunker()
+            try:
+                from lean.chunker import DocumentChunker
+                chunker = DocumentChunker()
+            except ImportError:
+                try:
+                    from chunker import DocumentChunker
+                    chunker = DocumentChunker()
+                except ImportError:
+                    logger.error("Could not import DocumentChunker")
+                    # Fallback to simple chunking
+                    return self._simple_chunk_text(document_text_or_chunks, min_chunks), chunk_metadata
             
             # Calculate appropriate chunk size
             if self.max_chunk_size is None:
@@ -308,28 +334,44 @@ class IssuesCrew:
                 calculated_chunk_size = doc_length // min_chunks
                 self.max_chunk_size = min(calculated_chunk_size + 100, 16000)
             
-            chunk_objects = chunker.chunk_document(
-                document_text_or_chunks,
-                min_chunks=min_chunks,
-                max_chunk_size=self.max_chunk_size
-            )
-            
-            # Extract text and metadata
-            chunks = []
-            for chunk in chunk_objects:
-                chunks.append(chunk["text"])
-                chunk_metadata.append({
-                    "position": chunk.get("position", ""),
-                    "chunk_type": chunk.get("chunk_type", ""),
-                    "index": chunk.get("index", 0)
-                })
+            try:
+                chunk_objects = chunker.chunk_document(
+                    document_text_or_chunks,
+                    min_chunks=min_chunks,
+                    max_chunk_size=self.max_chunk_size
+                )
+                
+                # Extract text and metadata
+                chunks = []
+                for chunk in chunk_objects:
+                    chunks.append(chunk["text"])
+                    chunk_metadata.append({
+                        "position": chunk.get("position", ""),
+                        "chunk_type": chunk.get("chunk_type", ""),
+                        "index": chunk.get("index", 0)
+                    })
+            except Exception as e:
+                logger.error(f"Error in document chunking: {e}")
+                # Fallback to simple chunking
+                return self._simple_chunk_text(document_text_or_chunks, min_chunks), chunk_metadata
             
             # Analyze document if needed
             if not document_info:
-                from lean.document import DocumentAnalyzer
-                analyzer = DocumentAnalyzer(self.llm_client)
-                document_info = asyncio.run(analyzer.analyze_preview(document_text_or_chunks))
-                document_info["original_text_length"] = len(document_text_or_chunks)
+                try:
+                    from lean.document import DocumentAnalyzer
+                    analyzer = DocumentAnalyzer(self.llm_client)
+                    document_info = asyncio.run(analyzer.analyze_preview(document_text_or_chunks))
+                    document_info["original_text_length"] = len(document_text_or_chunks)
+                except Exception as e:
+                    logger.warning(f"Document analysis failed: {e}")
+                    # Create basic document_info
+                    document_info = {
+                        "original_text_length": len(document_text_or_chunks),
+                        "basic_stats": {
+                            "word_count": len(document_text_or_chunks.split()),
+                            "char_count": len(document_text_or_chunks)
+                        }
+                    }
         
         elif isinstance(document_text_or_chunks, list):
             # We already have chunks
@@ -339,6 +381,19 @@ class IssuesCrew:
             raise TypeError("Expected either a string or a list of chunks")
         
         return chunks, chunk_metadata
+    
+    def _simple_chunk_text(self, text, min_chunks):
+        """Simple fallback chunking for when DocumentChunker is unavailable."""
+        chunk_size = len(text) // min_chunks
+        chunks = []
+        
+        # Create chunks of roughly equal size
+        for i in range(min_chunks):
+            start = i * chunk_size
+            end = (i + 1) * chunk_size if i < min_chunks - 1 else len(text)
+            chunks.append(text[start:end])
+            
+        return chunks
     
     def _apply_agent_instructions(self, custom_instructions):
         """Apply custom instructions to agents."""
@@ -449,7 +504,17 @@ class IssuesCrew:
         
         # Run the extraction process
         try:
-            return asyncio.run(extract_all_chunks())
+            # Check if there's an event loop
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_closed():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+            return loop.run_until_complete(extract_all_chunks())
         except Exception as e:
             logger.error(f"Error in parallel extraction: {str(e)}")
             if progress_callback:

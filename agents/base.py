@@ -4,11 +4,14 @@ Provides the foundation for all specialized agents in the system.
 """
 
 from typing import Dict, Any, Optional, List, Union
-from crewai import Agent
 import os
 import json
 import logging
 from datetime import datetime
+
+# Import our universal adapter and config manager
+from universal_llm_adapter import UniversalLLMAdapter
+from config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -43,13 +46,21 @@ class BaseAgent:
             max_rpm: Maximum requests per minute for API rate limiting
             custom_instructions: Optional custom instructions from Instructor agent
         """
-        self.llm_client = llm_client
+        # Ensure we have a UniversalLLMAdapter
+        if not isinstance(llm_client, UniversalLLMAdapter):
+            self.llm_client = UniversalLLMAdapter(llm_client=llm_client)
+        else:
+            self.llm_client = llm_client
+            
         self.agent_type = agent_type
         self.crew_type = crew_type
         self.verbose = verbose
         self.max_chunk_size = max_chunk_size
         self.max_rpm = max_rpm
         self.custom_instructions = custom_instructions or {}
+        
+        # Create config manager for loading configs
+        self.config_manager = ConfigManager()
         
         # Execution tracking
         self.execution_stats = {
@@ -67,20 +78,27 @@ class BaseAgent:
         agent_config = self._get_agent_config()
         
         # Create the CrewAI agent with optimized settings
-        self.agent = Agent(
-            role=agent_config.get("role", f"{crew_type.title()} {agent_type.title()} Agent"),
-            goal=agent_config.get("goal", f"Process {crew_type} through {agent_type}"),
-            backstory=self._get_backstory(agent_config),
-            verbose=verbose,
-            llm=llm_client,
-            # Add specific settings to help with large contexts
-            max_iterations=2,
-            max_rpm=max_rpm, 
-            llm_config={
-                "max_tokens": 800,  # Increased from 600 for more complex responses
-                "temperature": llm_client.temperature
-            }
-        )
+        try:
+            # Try to import CrewAI
+            from crewai import Agent
+            
+            self.agent = Agent(
+                role=agent_config.get("role", f"{crew_type.title()} {agent_type.title()} Agent"),
+                goal=agent_config.get("goal", f"Process {crew_type} through {agent_type}"),
+                backstory=self._get_backstory(agent_config),
+                verbose=verbose,
+                llm=llm_client,
+                # Add specific settings to help with large contexts
+                max_iterations=2,
+                max_rpm=max_rpm, 
+                llm_config={
+                    "max_tokens": 800,  # Increased from 600 for more complex responses
+                    "temperature": llm_client.temperature
+                }
+            )
+        except ImportError:
+            logger.warning("CrewAI not available, using direct LLM calls")
+            self.agent = None
     
     def _get_agent_config(self) -> Dict[str, Any]:
         """
@@ -133,22 +151,7 @@ class BaseAgent:
         Returns:
             Configuration dictionary
         """
-        config_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "agents", "config", f"{crew_type}_config.json"
-        )
-        
-        try:
-            with open(config_path, 'r') as f:
-                config = json.load(f)
-                logger.info(f"Loaded configuration from {config_path}")
-                return config
-        except FileNotFoundError:
-            logger.warning(f"Configuration file not found: {config_path}")
-            return {}
-        except json.JSONDecodeError:
-            logger.error(f"Error parsing configuration file: {config_path}")
-            return {}
+        return self.config_manager.get_config(crew_type)
     
     def _get_default_agent_config(self) -> Dict[str, Any]:
         """
@@ -195,7 +198,7 @@ class BaseAgent:
     
     def get_instructions(self) -> str:
         """
-        Get instructions for this agent, prioritizing custom instructions from Instructor.
+        Get instructions for this agent, prioritizing custom instructions from Planner.
         
         Returns:
             Instructions string
@@ -298,7 +301,6 @@ class BaseAgent:
         # Ensure final prompt isn't too large
         return self.truncate_text(prompt, 6000)  # Increased from 4000 to handle larger contexts
     
-    # In BaseAgent.execute_task method:
     def execute_task(self, description: str = None, context: Dict[str, Any] = None) -> Any:
         """
         Execute a task using this agent with enhanced metadata tracking.
@@ -330,8 +332,8 @@ class BaseAgent:
             # Execute the task
             result = None
             
-            # Check if the agent has execute_task method
-            if hasattr(self.agent, 'execute_task'):
+            # If we have a CrewAI agent, use it
+            if self.agent:
                 try:
                     # Create a Task object for CrewAI compatibility
                     from crewai import Task
@@ -355,12 +357,8 @@ class BaseAgent:
                         logger.error(f"Direct string approach also failed: {str(inner_e)}")
                         raise
             else:
-                # If execute_task isn't available, try run method
-                if hasattr(self.agent, 'run'):
-                    result = self.agent.run(description)
-                else:
-                    # If all else fails, raise an error
-                    raise AttributeError("Agent has no execute_task or run method")
+                # Use direct LLM call if no agent
+                result = self.llm_client.generate_completion(description)
             
             # Calculate execution time
             end_time = datetime.now()
