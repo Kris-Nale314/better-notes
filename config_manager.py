@@ -1,6 +1,7 @@
 """
 ConfigManager - Simplified configuration and processing options management.
 Provides a centralized way to handle configurations for Better Notes.
+Ensures all configuration types (including planner) are properly handled.
 """
 
 import os
@@ -84,10 +85,115 @@ class ConfigManager:
         self.base_dir = base_dir or os.getcwd()
         self.config_cache = {}
         
-        logger.info(f"ConfigManager initialized with base_dir: {self.base_dir}")
+        # Ensure critical directories exist
+        self._ensure_config_directories()
         
-        # Ensure cache directory exists
-        os.makedirs(os.path.join(self.base_dir, ".cache"), exist_ok=True)
+        # Create default configs if they don't exist
+        self._ensure_default_configs()
+        
+        logger.info(f"ConfigManager initialized with base_dir: {self.base_dir}")
+    
+    def _ensure_config_directories(self):
+        """Ensure all necessary configuration directories exist."""
+        # Create config directories
+        config_dirs = [
+            os.path.join(self.base_dir, "config"),
+            os.path.join(self.base_dir, "agents", "config"),
+            os.path.join(self.base_dir, ".cache")
+        ]
+        
+        for directory in config_dirs:
+            os.makedirs(directory, exist_ok=True)
+            
+        logger.info(f"Ensured config directories exist: {config_dirs}")
+    
+    def _ensure_default_configs(self):
+        """Ensure default configurations exist for critical components."""
+        # Check for planner/meta config and create if needed
+        planner_config = self.get_config("planner")
+        if not planner_config:
+            default_planner = {
+                "metadata": {
+                    "version": "1.0",
+                    "description": "Default planner configuration"
+                },
+                "planner": {
+                    "role": "Planning Agent",
+                    "goal": "Create optimized analysis plans"
+                }
+            }
+            self.save_config("planner", default_planner)
+            logger.info("Created default planner configuration")
+        
+        # Check for meta config and create if needed
+        meta_config = self.get_config("meta")
+        if not meta_config:
+            default_meta = {
+                "metadata": {
+                    "version": "1.0",
+                    "description": "Default meta-agent configuration"
+                },
+                "meta": {
+                    "role": "Meta Agent",
+                    "goal": "Coordinate analysis processes"
+                }
+            }
+            self.save_config("meta", default_meta)
+            logger.info("Created default meta configuration")
+        
+        # Ensure issues config exists
+        issues_config = self.get_config("issues")
+        if not issues_config:
+            default_issues = self._get_default_issues_config()
+            self.save_config("issues", default_issues)
+            logger.info("Created default issues configuration")
+    
+    def _get_default_issues_config(self):
+        """Get default issues configuration."""
+        return {
+            "metadata": {
+                "version": "1.0",
+                "description": "Default issues identification configuration"
+            },
+            "analysis_definition": {
+                "issue": {
+                    "definition": "Any problem, challenge, risk, or concern that may impact objectives, efficiency, or quality"
+                },
+                "severity_levels": {
+                    "critical": "Immediate threat to operations, security, or compliance; blocks major deliverables",
+                    "high": "Significant impact on effectiveness or efficiency; requires attention soon",
+                    "medium": "Causes inefficiency or limitations; should be addressed",
+                    "low": "Minor concern with minimal impact; could be addressed through regular improvements"
+                }
+            },
+            "agents": {
+                "extraction": {
+                    "role": "Issue Extractor",
+                    "goal": "Identify potential issues in document chunks",
+                    "instructions": "Analyze the document to identify issues, problems, and challenges."
+                },
+                "aggregation": {
+                    "role": "Issue Aggregator",
+                    "goal": "Combine and deduplicate issues from multiple extractions",
+                    "instructions": "Combine similar issues while preserving important distinctions."
+                },
+                "evaluation": {
+                    "role": "Issue Evaluator",
+                    "goal": "Assess severity and impact of identified issues",
+                    "instructions": "Evaluate each issue for severity, impact, and priority."
+                },
+                "formatting": {
+                    "role": "Report Formatter",
+                    "goal": "Create a clear, structured report of issues",
+                    "instructions": "Format the issues into a well-organized report grouped by severity."
+                },
+                "reviewer": {
+                    "role": "Analysis Reviewer",
+                    "goal": "Ensure analysis quality and alignment with user needs",
+                    "instructions": "Review the report for quality, consistency, and completeness."
+                }
+            }
+        }
     
     def get_config(self, config_name: str) -> Dict[str, Any]:
         """
