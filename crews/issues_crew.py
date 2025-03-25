@@ -1,13 +1,11 @@
-# crews/issues_crew.py
 """
-Enhanced Issues Crew with integrated Planner and ProcessingContext support.
+Enhanced Issues Crew with cleaner architecture.
 Analyzes documents to identify issues, problems, risks, and challenges.
 """
 
 import logging
 import asyncio
 import time
-import json
 from typing import Dict, Any, List, Optional, Callable
 from datetime import datetime
 
@@ -29,7 +27,7 @@ logger = logging.getLogger(__name__)
 class IssuesCrew:
     """
     Specialized crew for identifying, evaluating, and reporting issues in documents.
-    Contains all required agents, including the Planner, and works with ProcessingContext.
+    Simplified implementation with standardized stage execution.
     """
     
     def __init__(
@@ -66,82 +64,52 @@ class IssuesCrew:
         self.document_analyzer = DocumentAnalyzer(llm_client)
         self.chunker = DocumentChunker()
         
-        # Initialize all agents (including Planner)
-        self._init_agents()
+        # Initialize the agent factory
+        self._init_agent_factory()
         
         logger.info("IssuesCrew initialized with all agents")
     
-    def _init_agents(self):
-        """Initialize all agents needed for the crew."""
-        try:
-            # Create Planner agent (now part of the crew)
-            self.planner_agent = PlannerAgent(
-                llm_client=self.llm_client,
-                crew_type="issues",
-                config=self.config,
-                config_manager=self.config_manager,
-                verbose=self.verbose,
-                max_chunk_size=self.max_chunk_size,
-                max_rpm=self.max_rpm
-            )
-            
-            # Create other specialized agents
-            self.extractor_agent = ExtractorAgent(
-                llm_client=self.llm_client,
-                crew_type="issues",
-                config=self.config,
-                config_manager=self.config_manager,
-                verbose=self.verbose,
-                max_chunk_size=self.max_chunk_size,
-                max_rpm=self.max_rpm
-            )
-            
-            self.aggregator_agent = AggregatorAgent(
-                llm_client=self.llm_client,
-                crew_type="issues", 
-                config=self.config,
-                config_manager=self.config_manager,
-                verbose=self.verbose,
-                max_chunk_size=self.max_chunk_size,
-                max_rpm=self.max_rpm
-            )
-            
-            self.evaluator_agent = EvaluatorAgent(
-                llm_client=self.llm_client,
-                crew_type="issues",
-                config=self.config,
-                config_manager=self.config_manager,
-                verbose=self.verbose,
-                max_chunk_size=self.max_chunk_size,
-                max_rpm=self.max_rpm
-            )
-            
-            self.formatter_agent = FormatterAgent(
-                llm_client=self.llm_client,
-                crew_type="issues",
-                config=self.config,
-                config_manager=self.config_manager,
-                verbose=self.verbose,
-                max_chunk_size=self.max_chunk_size,
-                max_rpm=self.max_rpm
-            )
-            
-            self.reviewer_agent = ReviewerAgent(
-                llm_client=self.llm_client,
-                crew_type="issues",
-                config=self.config,
-                config_manager=self.config_manager,
-                verbose=self.verbose,
-                max_chunk_size=self.max_chunk_size,
-                max_rpm=self.max_rpm
-            )
-            
-            logger.info("All agents initialized successfully")
-        except Exception as e:
-            logger.error(f"Error initializing agents: {e}")
-            raise
+    def _init_agent_factory(self):
+        """Initialize the agent factory for creating agents on demand."""
+        self.agents = {}
+        
+        # Define agent classes
+        self.agent_classes = {
+            "planner": PlannerAgent,
+            "extractor": ExtractorAgent,
+            "aggregator": AggregatorAgent,
+            "evaluator": EvaluatorAgent,
+            "formatter": FormatterAgent,
+            "reviewer": ReviewerAgent
+        }
     
-    # crews/issues_crew.py
+    def _get_agent(self, agent_type: str) -> BaseAgent:
+        """
+        Get or create an agent by type.
+        
+        Args:
+            agent_type: Type of agent to get
+            
+        Returns:
+            Agent instance
+        """
+        if agent_type not in self.agents:
+            if agent_type not in self.agent_classes:
+                raise ValueError(f"Unknown agent type: {agent_type}")
+            
+            # Create the agent
+            self.agents[agent_type] = self.agent_classes[agent_type](
+                llm_client=self.llm_client,
+                crew_type="issues",
+                config=self.config,
+                config_manager=self.config_manager,
+                verbose=self.verbose,
+                max_chunk_size=self.max_chunk_size,
+                max_rpm=self.max_rpm
+            )
+        
+        return self.agents[agent_type]
+    
     async def process_document_with_context(self, context, progress_callback=None):
         """
         Process a document using the provided context.
@@ -154,30 +122,48 @@ class IssuesCrew:
             ProcessingContext with results
         """
         try:
-            # Stage 1: Document Analysis
-            await self._analyze_document(context, progress_callback)
+            # Process through each stage
+            await self._execute_stage(
+                context, "document_analysis", self._analyze_document,
+                0.05, "Analyzing document...", progress_callback
+            )
             
-            # Stage 2: Document Chunking
-            self._chunk_document(context, progress_callback)
+            await self._execute_stage(
+                context, "document_chunking", self._chunk_document,
+                0.12, "Chunking document...", progress_callback
+            )
             
-            # Stage 3: Planning
-            await self._create_plan(context, progress_callback)
+            await self._execute_stage(
+                context, "planning", self._create_plan,
+                0.17, "Creating analysis plan...", progress_callback
+            )
             
-            # Stage 4: Extraction
-            await self._extract_issues(context, progress_callback)
+            await self._execute_stage(
+                context, "extraction", self._extract_issues,
+                0.22, "Extracting issues from document...", progress_callback
+            )
             
-            # Stage 5: Aggregation
-            await self._aggregate_issues(context, progress_callback)
+            await self._execute_stage(
+                context, "aggregation", self._aggregate_issues,
+                0.55, "Aggregating issues...", progress_callback
+            )
             
-            # Stage 6: Evaluation
-            await self._evaluate_issues(context, progress_callback)
+            await self._execute_stage(
+                context, "evaluation", self._evaluate_issues,
+                0.7, "Evaluating issues...", progress_callback
+            )
             
-            # Stage 7: Formatting
-            await self._format_report(context, progress_callback)
+            await self._execute_stage(
+                context, "formatting", self._format_report,
+                0.8, "Creating report...", progress_callback
+            )
             
-            # Stage 8: Review (optional)
+            # Only run review if enabled
             if context.options.get("enable_reviewer", True):
-                await self._review_report(context, progress_callback)
+                await self._execute_stage(
+                    context, "review", self._review_report,
+                    0.9, "Reviewing report...", progress_callback
+                )
             
             # Mark processing as complete
             if progress_callback:
@@ -193,291 +179,209 @@ class IssuesCrew:
                 current_stage = context.metadata['current_stage']
                 context.fail_stage(current_stage, str(e))
             
-            # Re-raise the exception to be handled by the Orchestrator
-            raise
-
-    # 1. _analyze_document
-    async def _analyze_document(self, context, progress_callback):
-        """Analyze the document to extract metadata."""
-        context.set_stage("document_analysis")
-        if progress_callback:
-            progress_callback(0.05, "Analyzing document...")
-        
-        try:
-            # Get document text from context
-            document_text = context.document_text
-            
-            # Analyze document to get metadata
-            document_info = await self.document_analyzer.analyze_preview(document_text)
-            
-            # Store analysis results in context
-            context.document_info = document_info
-            
-            # Mark stage as complete
-            context.complete_stage("document_analysis", document_info)
-            
-            if progress_callback:
-                progress_callback(0.1, "Document analysis complete")
-                
-        except Exception as e:
-            logger.error(f"Error in document analysis: {e}")
-            context.fail_stage("document_analysis", str(e))
-            raise
-
-    def _chunk_document(self, context, progress_callback):
-        """Chunk the document for processing."""
-        context.set_stage("document_chunking")
-        if progress_callback:
-            progress_callback(0.12, "Chunking document...")
-        
-        try:
-            # Get document text and options
-            document_text = context.document_text
-            min_chunks = context.options.get("min_chunks", 3)
-            max_chunk_size = context.options.get("max_chunk_size", self.max_chunk_size)
-            
-            # Chunk the document
-            chunk_objects = self.chunker.chunk_document(
-                document_text,
-                min_chunks=min_chunks,
-                max_chunk_size=max_chunk_size
-            )
-            
-            # Store chunks and metadata in context
-            context.chunks = [chunk["text"] for chunk in chunk_objects]
-            context.chunk_metadata = chunk_objects
-            
-            # Mark stage as complete
-            context.complete_stage("document_chunking", {
-                "chunk_count": len(context.chunks),
-                "chunk_objects": chunk_objects
-            })
-            
-            if progress_callback:
-                progress_callback(0.15, f"Document chunked into {len(context.chunks)} sections")
-                
-        except Exception as e:
-            logger.error(f"Error in document chunking: {e}")
-            context.fail_stage("document_chunking", str(e))
-            raise
-
-    # 2. _create_plan
-    async def _create_plan(self, context, progress_callback):
-        """Create a plan using the Planner agent."""
-        context.set_stage("planning")
-        if progress_callback:
-            progress_callback(0.17, "Creating analysis plan...")
-        
-        try:
-            # Prepare the planning context
-            user_preferences = {
-                "detail_level": context.options.get("detail_level", "standard"),
-                "focus_areas": context.options.get("focus_areas", []),
-                "user_instructions": context.options.get("user_instructions", "")
-            }
-            
-            # Let the Planner create a plan
-            plan = await self.planner_agent.create_plan(
-                document_info=context.document_info,
-                user_preferences=user_preferences,
-                crew_type="issues"
-            )
-            
-            # Store plan in context
-            context.agent_instructions = plan
-            
-            # Mark stage as complete
-            context.complete_stage("planning", plan)
-            
-            if progress_callback:
-                progress_callback(0.2, "Analysis plan created")
-                
-        except Exception as e:
-            logger.error(f"Error in planning: {e}")
-            context.fail_stage("planning", str(e))
-            raise
-
-    # 3. _extract_issues
-    async def _extract_issues(self, context, progress_callback):
-        """Extract issues from document chunks."""
-        context.set_stage("extraction")
-        if progress_callback:
-            progress_callback(0.22, "Extracting issues from document...")
-        
-        try:
-            # Process each chunk to extract issues
-            extraction_results = []
-            chunks = context.chunks
-            chunk_metadata = context.chunk_metadata
-            
-            # Track extraction progress
-            extraction_progress_range = (0.22, 0.5)  # 22% to 50% of total progress
-            progress_per_chunk = (extraction_progress_range[1] - extraction_progress_range[0]) / len(chunks)
-            
-            for i, chunk in enumerate(chunks):
-                # Update progress for this chunk
-                if progress_callback:
-                    chunk_progress = extraction_progress_range[0] + (i * progress_per_chunk)
-                    progress_callback(
-                        chunk_progress, 
-                        f"Extracting issues from chunk {i+1}/{len(chunks)}"
-                    )
-                
-                # Get metadata for this chunk
-                metadata = chunk_metadata[i] if i < len(chunk_metadata) else {"index": i}
-                
-                # Extract issues from this chunk
-                result = await self.extractor_agent.extract_from_chunk(
-                    chunk=chunk,
-                    document_info=context.document_info,
-                    chunk_metadata=metadata
-                )
-                
-                # Add to results
-                extraction_results.append(result)
-            
-            # Store extraction results in context
-            context.results["extraction"] = extraction_results
-            
-            # Mark stage as complete
-            context.complete_stage("extraction", extraction_results)
-            
-            if progress_callback:
-                progress_callback(0.5, "Issue extraction complete")
-                
-        except Exception as e:
-            logger.error(f"Error in extraction: {e}")
-            context.fail_stage("extraction", str(e))
-            raise
-
-    # 4. _aggregate_issues
-    async def _aggregate_issues(self, context, progress_callback):
-        """Aggregate issues from multiple chunks."""
-        context.set_stage("aggregation")
-        if progress_callback:
-            progress_callback(0.55, "Aggregating issues...")
-        
-        try:
-            # Get extraction results
-            extraction_results = context.results.get("extraction", [])
-            
-            # Aggregate issues
-            aggregated_result = await self.aggregator_agent.aggregate_results(
-                extraction_results=extraction_results,
-                document_info=context.document_info
-            )
-            
-            # Store aggregation results in context
-            context.results["aggregation"] = aggregated_result
-            
-            # Mark stage as complete
-            context.complete_stage("aggregation", aggregated_result)
-            
-            if progress_callback:
-                progress_callback(0.65, "Issues aggregated")
-                
-        except Exception as e:
-            logger.error(f"Error in aggregation: {e}")
-            context.fail_stage("aggregation", str(e))
-            raise
-
-    # 5. _evaluate_issues
-    async def _evaluate_issues(self, context, progress_callback):
-        """Evaluate aggregated issues."""
-        context.set_stage("evaluation")
-        if progress_callback:
-            progress_callback(0.7, "Evaluating issues...")
-        
-        try:
-            # Get aggregation results
-            aggregated_result = context.results.get("aggregation", {})
-            
-            # Evaluate issues
-            evaluated_result = await self.evaluator_agent.evaluate_items(
-                aggregated_items=aggregated_result,
-                document_info=context.document_info
-            )
-            
-            # Store evaluation results in context
-            context.results["evaluation"] = evaluated_result
-            
-            # Mark stage as complete
-            context.complete_stage("evaluation", evaluated_result)
-            
-            if progress_callback:
-                progress_callback(0.75, "Issues evaluated")
-                
-        except Exception as e:
-            logger.error(f"Error in evaluation: {e}")
-            context.fail_stage("evaluation", str(e))
-            raise
-
-    # 6. _format_report
-    async def _format_report(self, context, progress_callback):
-        """Format the issues report."""
-        context.set_stage("formatting")
-        if progress_callback:
-            progress_callback(0.8, "Creating report...")
-        
-        try:
-            # Get evaluation results
-            evaluated_result = context.results.get("evaluation", {})
-            
-            # Format the report
-            formatted_result = await self.formatter_agent.format_report(
-                evaluated_items=evaluated_result,
-                document_info=context.document_info,
-                user_preferences=context.options
-            )
-            
-            # Store formatting results in context
-            context.results["formatting"] = formatted_result
-            
-            # Mark stage as complete
-            context.complete_stage("formatting", formatted_result)
-            
-            if progress_callback:
-                progress_callback(0.85, "Report created")
-                
-        except Exception as e:
-            logger.error(f"Error in formatting: {e}")
-            context.fail_stage("formatting", str(e))
-            raise
-
-    # 7. _review_report
-    async def _review_report(self, context, progress_callback):
-        """Review the formatted report."""
-        context.set_stage("review")
-        if progress_callback:
-            progress_callback(0.9, "Reviewing report...")
-        
-        try:
-            # Get formatted result
-            formatted_result = context.results.get("formatting", {})
-            
-            # Review the report
-            review_result = await self.reviewer_agent.review_analysis(
-                formatted_result=formatted_result,
-                document_info=context.document_info,
-                user_preferences=context.options
-            )
-            
-            # Store review results in context
-            context.results["review"] = review_result
-            
-            # Mark stage as complete
-            context.complete_stage("review", review_result)
-            
-            if progress_callback:
-                progress_callback(0.95, "Report reviewed")
-                
-        except Exception as e:
-            logger.error(f"Error in review: {e}")
-            context.fail_stage("review", str(e))
+            # Re-raise the exception
             raise
     
+    async def _execute_stage(self, context, stage_name, stage_method, progress_value, progress_message, progress_callback=None):
+        """
+        Execute a processing stage with standardized error handling and progress tracking.
+        
+        Args:
+            context: ProcessingContext object
+            stage_name: Name of the stage
+            stage_method: Method to execute
+            progress_value: Progress value (0.0 to 1.0)
+            progress_message: Progress message
+            progress_callback: Optional progress callback
+        
+        Returns:
+            Stage result
+        """
+        context.set_stage(stage_name)
+        if progress_callback:
+            progress_callback(progress_value, progress_message)
+        
+        try:
+            # Store progress callback in context for substage progress
+            if not hasattr(context, 'metadata'):
+                context.metadata = {}
+            context.metadata['progress_callback'] = progress_callback
+            
+            # Execute the stage method
+            result = await stage_method(context)
+            
+            # Mark stage as complete
+            context.complete_stage(stage_name, result)
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in {stage_name}: {e}")
+            context.fail_stage(stage_name, str(e))
+            raise
+    
+    async def _analyze_document(self, context):
+        """
+        Analyze document to extract metadata.
+        
+        Args:
+            context: ProcessingContext object
+            
+        Returns:
+            Document analysis results
+        """
+        # Get document text from context
+        document_text = context.document_text
+        
+        # Analyze document
+        document_info = await self.document_analyzer.analyze_preview(document_text)
+        
+        # Store analysis results in context
+        context.document_info = document_info
+        
+        return document_info
+    
+    async def _chunk_document(self, context):
+        """
+        Chunk document for processing.
+        
+        Args:
+            context: ProcessingContext object
+            
+        Returns:
+            Chunking results
+        """
+        # Get document text and options
+        document_text = context.document_text
+        min_chunks = context.options.get("min_chunks", 3)
+        max_chunk_size = context.options.get("max_chunk_size", self.max_chunk_size)
+        
+        # Chunk the document
+        chunk_objects = self.chunker.chunk_document(
+            document_text,
+            min_chunks=min_chunks,
+            max_chunk_size=max_chunk_size
+        )
+        
+        # Store chunks and metadata in context
+        context.chunks = [chunk["text"] for chunk in chunk_objects]
+        context.chunk_metadata = chunk_objects
+        
+        return {
+            "chunk_count": len(context.chunks),
+            "chunk_metadata": chunk_objects
+        }
+    
+    async def _create_plan(self, context):
+        """
+        Create a plan using the Planner agent.
+        
+        Args:
+            context: ProcessingContext object
+            
+        Returns:
+            Planning result
+        """
+        # Get the planner agent
+        planner = self._get_agent("planner")
+        
+        # Create the plan
+        plan = await planner.process(context)
+        
+        return plan
+    
+    async def _extract_issues(self, context):
+        """
+        Extract issues from document chunks.
+        
+        Args:
+            context: ProcessingContext object
+            
+        Returns:
+            Extraction results
+        """
+        # Get the extractor agent
+        extractor = self._get_agent("extractor")
+        
+        # Extract issues
+        extraction_results = await extractor.process(context)
+        
+        return extraction_results
+    
+    async def _aggregate_issues(self, context):
+        """
+        Aggregate issues from extraction results.
+        
+        Args:
+            context: ProcessingContext object
+            
+        Returns:
+            Aggregation results
+        """
+        # Get the aggregator agent
+        aggregator = self._get_agent("aggregator")
+        
+        # Aggregate issues
+        aggregated_result = await aggregator.process(context)
+        
+        return aggregated_result
+    
+    async def _evaluate_issues(self, context):
+        """
+        Evaluate aggregated issues.
+        
+        Args:
+            context: ProcessingContext object
+            
+        Returns:
+            Evaluation results
+        """
+        # Get the evaluator agent
+        evaluator = self._get_agent("evaluator")
+        
+        # Evaluate issues
+        evaluated_result = await evaluator.process(context)
+        
+        return evaluated_result
+    
+    async def _format_report(self, context):
+        """
+        Format the issues report.
+        
+        Args:
+            context: ProcessingContext object
+            
+        Returns:
+            Formatting results
+        """
+        # Get the formatter agent
+        formatter = self._get_agent("formatter")
+        
+        # Format the report
+        formatted_result = await formatter.process(context)
+        
+        return formatted_result
+    
+    async def _review_report(self, context):
+        """
+        Review the formatted report.
+        
+        Args:
+            context: ProcessingContext object
+            
+        Returns:
+            Review results
+        """
+        # Get the reviewer agent
+        reviewer = self._get_agent("reviewer")
+        
+        # Review the report
+        review_result = await reviewer.process(context)
+        
+        return review_result
+    
     # Legacy method for backward compatibility
-    def process_document(
+    async def process_document(
         self, 
         document_text,
         document_info=None, 
@@ -490,6 +394,18 @@ class IssuesCrew:
         """
         Legacy method for backward compatibility.
         Creates a context and uses process_document_with_context.
+        
+        Args:
+            document_text: Document text to process
+            document_info: Optional pre-loaded document info
+            user_preferences: Optional user preferences
+            max_chunk_size: Optional max chunk size
+            min_chunks: Minimum number of chunks
+            enable_reviewer: Whether to enable the reviewer
+            progress_callback: Optional progress callback
+            
+        Returns:
+            Processing results
         """
         # Import ProcessingContext
         from orchestrator import ProcessingContext
@@ -512,7 +428,54 @@ class IssuesCrew:
             context.document_info = document_info
         
         # Process with the new method
-        self.process_document_with_context(context, progress_callback)
+        await self.process_document_with_context(context, progress_callback)
         
         # Return results in the old format
         return context.get_final_result()
+        
+    # Synchronous version for easier integration
+    def process_document_sync(
+        self, 
+        document_text,
+        document_info=None, 
+        user_preferences=None, 
+        max_chunk_size=None,
+        min_chunks=3,
+        enable_reviewer=True,
+        progress_callback=None
+    ):
+        """
+        Synchronous version of process_document.
+        
+        Args:
+            document_text: Document text to process
+            document_info: Optional pre-loaded document info
+            user_preferences: Optional user preferences
+            max_chunk_size: Optional max chunk size
+            min_chunks: Minimum number of chunks
+            enable_reviewer: Whether to enable the reviewer
+            progress_callback: Optional progress callback
+            
+        Returns:
+            Processing results
+        """
+        # Create a new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            # Run the async method in the event loop
+            return loop.run_until_complete(
+                self.process_document(
+                    document_text=document_text,
+                    document_info=document_info,
+                    user_preferences=user_preferences,
+                    max_chunk_size=max_chunk_size,
+                    min_chunks=min_chunks,
+                    enable_reviewer=enable_reviewer,
+                    progress_callback=progress_callback
+                )
+            )
+        finally:
+            # Always close the loop
+            loop.close()

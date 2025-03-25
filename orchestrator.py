@@ -1,7 +1,6 @@
-# orchestrator.py
 """
 Enhanced Orchestrator for Better Notes with integrated ProcessingContext.
-Provides streamlined document processing with improved state management.
+Simplified implementation that works with the new agent architecture.
 """
 
 import time
@@ -142,8 +141,6 @@ class ProcessingContext:
             except Exception as e:
                 logger.warning(f"Error in progress callback: {e}")
     
-    # In orchestrator.py, update the get_final_result method in ProcessingContext class
-
     def get_final_result(self) -> Dict[str, Any]:
         """
         Get the final processing result.
@@ -151,7 +148,7 @@ class ProcessingContext:
         Returns:
             Dictionary with processing results and metadata
         """
-        # Get the formatted result (it might be a string for HTML output)
+        # Get the formatted result (might be string for HTML or dict)
         formatted_result = self.results.get("formatting", {})
         
         # Create a base result dictionary
@@ -217,7 +214,6 @@ class Orchestrator:
         # Ensure we have a proper LLM adapter
         if llm_client is not None:
             # Wrap the existing client
-            from universal_llm_adapter import LLMAdapter
             self.llm_client = LLMAdapter(
                 llm_client=llm_client,
                 model=model,
@@ -225,7 +221,6 @@ class Orchestrator:
             )
         else:
             # Create a new client
-            from universal_llm_adapter import LLMAdapter
             self.llm_client = LLMAdapter(
                 api_key=api_key,
                 model=model,
@@ -242,7 +237,6 @@ class Orchestrator:
         
         logger.info(f"Orchestrator initialized with model: {model}, max_rpm: {max_rpm}")
     
-    # orchestrator.py
     async def process_document(
         self, 
         document_text: str,
@@ -261,14 +255,18 @@ class Orchestrator:
             Processing results
         """
         # Create a processing context
-        context = ProcessingContext(document_text, options)
+        context = ProcessingContext(document_text, options or {})
         
         try:
             # Determine crew type from options
-            if options and "crews" in options and options["crews"]:
-                crew_type = options["crews"][0]
-            else:
-                crew_type = "issues"  # Default crew type
+            crew_type = "issues"  # Default crew type
+            
+            if options:
+                if "crew_type" in options:
+                    crew_type = options["crew_type"]
+                elif "crews" in options and options["crews"]:
+                    # Legacy support for 'crews' list
+                    crew_type = options["crews"][0]
             
             logger.info(f"Processing document with crew type: {crew_type}")
             
@@ -313,7 +311,6 @@ class Orchestrator:
         if crew_type not in self._crews:
             # Create the crew based on type
             if crew_type == "issues":
-                # Import here to avoid circular imports
                 try:
                     from crews.issues_crew import IssuesCrew
                     logger.info(f"Creating IssuesCrew instance")
@@ -332,39 +329,3 @@ class Orchestrator:
                 raise ValueError(f"Unsupported crew type: {crew_type}")
         
         return self._crews[crew_type]
-    
-    def process_document_sync(
-        self, 
-        document_text: str,
-        options: Optional[Dict[str, Any]] = None,
-        progress_callback: Optional[Callable[[float, str], None]] = None
-    ) -> Dict[str, Any]:
-        """
-        Process a document synchronously.
-        This is a wrapper around the async method.
-        
-        Args:
-            document_text: Document text
-            options: Processing options
-            progress_callback: Progress callback
-            
-        Returns:
-            Processing results
-        """
-        # Create a new event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        try:
-            # Run the async method in the event loop
-            return loop.run_until_complete(
-                self.process_document(document_text, options, progress_callback)
-            )
-        finally:
-            # Always close the loop
-            loop.close()
-
-# Factory function for backward compatibility
-def create_orchestrator(**kwargs):
-    """Create an orchestrator with the provided parameters."""
-    return Orchestrator(**kwargs)

@@ -1,312 +1,274 @@
 """
-ConfigManager - Simplified configuration and processing options management.
-Provides a centralized way to handle configurations for Better Notes.
-Ensures all configuration types (including planner) are properly handled.
+Config Manager for Better Notes.
+Simplified configuration management that works with the new agent architecture.
 """
 
 import os
 import json
 import logging
-import dataclasses
-from dataclasses import dataclass, field, asdict
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class ProcessingOptions:
-    """
-    Configuration options for document processing and analysis.
-    """
-    # Core Model Settings
-    model_name: str = "gpt-3.5-turbo"
-    temperature: float = 0.2
-
-    # Chunking Settings
-    min_chunks: int = 3
-    max_chunk_size: Optional[int] = None
-
-    # Detail Level
-    detail_level: str = "standard"  # essential, standard, comprehensive
-
-    # Analysis Settings
-    preview_length: int = 2000
-
-    # Performance Settings
-    max_concurrent_chunks: int = 5
-    max_rpm: int = 10
-    enable_caching: bool = True
-    cache_dir: str = ".cache"
-
-    # Output Settings
-    include_metadata: bool = True
-
-    # User Instructions
-    user_instructions: Optional[str] = None
-
-    # Focus Areas
-    focus_areas: List[str] = field(default_factory=list)
-    
-    # Analysis Types
-    crews: List[str] = field(default_factory=lambda: ["issues"])
-    
-    # Reviewer
-    enable_reviewer: bool = True
-    
-    # Pass-Specific Options
-    pass_options: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert options to dictionary."""
-        return asdict(self)
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ProcessingOptions':
-        """Create options from dictionary."""
-        # Get valid field names using dataclasses.fields()
-        valid_keys = {f.name for f in dataclasses.fields(cls)}
-        
-        # Filter out keys that aren't in the dataclass
-        filtered_data = {k: v for k, v in data.items() if k in valid_keys}
-        return cls(**filtered_data)
-
-
 class ConfigManager:
-    """Simple configuration management for Better Notes."""
+    """
+    Manages configuration for the Better Notes system.
+    Loads and provides access to configuration files.
+    """
     
-    def __init__(self, base_dir=None):
+    def __init__(self, config_dir: str = "config"):
         """
         Initialize the config manager.
         
         Args:
-            base_dir: Base directory for configuration files
+            config_dir: Directory containing configuration files
         """
-        # Use provided base_dir or determine from current directory
-        self.base_dir = base_dir or os.getcwd()
-        self.config_cache = {}
+        self.config_dir = Path(config_dir)
+        self.configs = {}
         
-        # Ensure critical directories exist
-        self._ensure_config_directories()
+        # Ensure config directory exists
+        if not self.config_dir.exists():
+            logger.warning(f"Config directory '{config_dir}' not found. Using default configurations.")
         
-        # Create default configs if they don't exist
-        self._ensure_default_configs()
-        
-        logger.info(f"ConfigManager initialized with base_dir: {self.base_dir}")
-    
-    def _ensure_config_directories(self):
-        """Ensure all necessary configuration directories exist."""
-        # Create config directories
-        config_dirs = [
-            os.path.join(self.base_dir, "config"),
-            os.path.join(self.base_dir, "agents", "config"),
-            os.path.join(self.base_dir, ".cache")
-        ]
-        
-        for directory in config_dirs:
-            os.makedirs(directory, exist_ok=True)
-            
-        logger.info(f"Ensured config directories exist: {config_dirs}")
-    
-    def _ensure_default_configs(self):
-        """Ensure default configurations exist for critical components."""
-        # Check for planner/meta config and create if needed
-        planner_config = self.get_config("planner")
-        if not planner_config:
-            default_planner = {
-                "metadata": {
-                    "version": "1.0",
-                    "description": "Default planner configuration"
-                },
-                "planner": {
-                    "role": "Planning Agent",
-                    "goal": "Create optimized analysis plans"
-                }
-            }
-            self.save_config("planner", default_planner)
-            logger.info("Created default planner configuration")
-        
-        # Check for meta config and create if needed
-        meta_config = self.get_config("meta")
-        if not meta_config:
-            default_meta = {
-                "metadata": {
-                    "version": "1.0",
-                    "description": "Default meta-agent configuration"
-                },
-                "meta": {
-                    "role": "Meta Agent",
-                    "goal": "Coordinate analysis processes"
-                }
-            }
-            self.save_config("meta", default_meta)
-            logger.info("Created default meta configuration")
-        
-        # Ensure issues config exists
-        issues_config = self.get_config("issues")
-        if not issues_config:
-            default_issues = self._get_default_issues_config()
-            self.save_config("issues", default_issues)
-            logger.info("Created default issues configuration")
-    
-    def _get_default_issues_config(self):
-        """Get default issues configuration."""
-        return {
-            "metadata": {
-                "version": "1.0",
-                "description": "Default issues identification configuration"
-            },
-            "analysis_definition": {
-                "issue": {
-                    "definition": "Any problem, challenge, risk, or concern that may impact objectives, efficiency, or quality"
-                },
-                "severity_levels": {
-                    "critical": "Immediate threat to operations, security, or compliance; blocks major deliverables",
-                    "high": "Significant impact on effectiveness or efficiency; requires attention soon",
-                    "medium": "Causes inefficiency or limitations; should be addressed",
-                    "low": "Minor concern with minimal impact; could be addressed through regular improvements"
-                }
-            },
-            "agents": {
-                "extraction": {
-                    "role": "Issue Extractor",
-                    "goal": "Identify potential issues in document chunks",
-                    "instructions": "Analyze the document to identify issues, problems, and challenges."
-                },
-                "aggregation": {
-                    "role": "Issue Aggregator",
-                    "goal": "Combine and deduplicate issues from multiple extractions",
-                    "instructions": "Combine similar issues while preserving important distinctions."
-                },
-                "evaluation": {
-                    "role": "Issue Evaluator",
-                    "goal": "Assess severity and impact of identified issues",
-                    "instructions": "Evaluate each issue for severity, impact, and priority."
-                },
-                "formatting": {
-                    "role": "Report Formatter",
-                    "goal": "Create a clear, structured report of issues",
-                    "instructions": "Format the issues into a well-organized report grouped by severity."
-                },
-                "reviewer": {
-                    "role": "Analysis Reviewer",
-                    "goal": "Ensure analysis quality and alignment with user needs",
-                    "instructions": "Review the report for quality, consistency, and completeness."
-                }
-            }
-        }
+        logger.info(f"ConfigManager initialized with config directory: {config_dir}")
     
     def get_config(self, config_name: str) -> Dict[str, Any]:
         """
         Get configuration by name.
         
         Args:
-            config_name: Name of the configuration (without _config.json suffix)
+            config_name: Name of the configuration to get
             
         Returns:
-            Configuration dictionary or empty dict if not found
+            Configuration dictionary
         """
-        # Return cached config if available
-        if config_name in self.config_cache:
-            return self.config_cache[config_name]
+        # Check if already loaded
+        if config_name in self.configs:
+            return self.configs[config_name]
         
-        # Standard config locations to try
-        config_paths = [
-            os.path.join(self.base_dir, "config", f"{config_name}_config.json"),
-            os.path.join(self.base_dir, "agents", "config", f"{config_name}_config.json"),
-            os.path.join(self.base_dir, f"{config_name}_config.json"),
-            os.path.join("config", f"{config_name}_config.json"),
-            os.path.join("agents", "config", f"{config_name}_config.json"),
-        ]
+        # Try to load the configuration
+        config = self._load_config(config_name)
         
-        # Try each path
-        for path in config_paths:
-            if os.path.exists(path):
-                try:
-                    with open(path, 'r', encoding='utf-8') as f:
-                        config = json.load(f)
-                        self.config_cache[config_name] = config
-                        logger.info(f"Loaded configuration from {path}")
-                        return config
-                except json.JSONDecodeError:
-                    logger.warning(f"Invalid JSON in config file: {path}")
+        # Cache for future use
+        self.configs[config_name] = config
         
-        # Log warning if no config found
-        logger.warning(f"Could not find configuration for {config_name}")
-        return {}
+        return config
     
-    def save_config(self, config_name: str, config_data: Dict[str, Any]) -> Optional[str]:
+    def _load_config(self, config_name: str) -> Dict[str, Any]:
         """
-        Save a configuration to file.
+        Load configuration from file.
+        
+        Args:
+            config_name: Name of the configuration to load
+            
+        Returns:
+            Configuration dictionary
+        """
+        # Generate file path
+        config_file = self.config_dir / f"{config_name}_config.json"
+        
+        try:
+            # Try to load the file
+            if config_file.exists():
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            
+            # Try alternative location (agents/config)
+            agent_config_path = Path("agents") / "config" / f"{config_name}_config.json"
+            if agent_config_path.exists():
+                with open(agent_config_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+                    
+            # If not found, return default config
+            logger.warning(f"Config file for '{config_name}' not found. Using default.")
+            return self._get_default_config(config_name)
+            
+        except Exception as e:
+            logger.error(f"Error loading config '{config_name}': {e}")
+            return self._get_default_config(config_name)
+    
+    def _get_default_config(self, config_name: str) -> Dict[str, Any]:
+        """
+        Get default configuration for a specific type.
         
         Args:
             config_name: Name of the configuration
-            config_data: Configuration data to save
             
         Returns:
-            Path where configuration was saved, or None if save failed
+            Default configuration dictionary
         """
-        # Create config directory if needed
-        config_dir = os.path.join(self.base_dir, "config")
-        os.makedirs(config_dir, exist_ok=True)
-        
-        # Save to file
-        filename = f"{config_name}_config.json"
-        path = os.path.join(config_dir, filename)
-        
-        try:
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump(config_data, f, indent=2)
-            
-            # Update cache
-            self.config_cache[config_name] = config_data
-            logger.info(f"Saved configuration to {path}")
-            return path
-        except Exception as e:
-            logger.error(f"Error saving configuration {config_name}: {e}")
-            return None
+        if config_name == "issues":
+            return self._get_default_issues_config()
+        else:
+            # Generic default config
+            return {
+                "crew_type": config_name,
+                "description": f"Default configuration for {config_name}",
+                "workflow": {
+                    "enabled_stages": ["document_analysis", "chunking", "planning", 
+                                    "extraction", "aggregation", "evaluation", 
+                                    "formatting", "review"],
+                    "agent_roles": {
+                        "planner": {
+                            "description": "Plans the analysis approach",
+                            "primary_task": "Create tailored instructions for each agent"
+                        },
+                        "extractor": {
+                            "description": "Extracts relevant information from chunks",
+                            "primary_task": f"Extract {config_name} from each document chunk"
+                        },
+                        "aggregator": {
+                            "description": "Combines and deduplicates extraction results",
+                            "primary_task": f"Combine similar {config_name} from all document chunks"
+                        },
+                        "evaluator": {
+                            "description": "Evaluates importance and priority",
+                            "primary_task": f"Evaluate each {config_name} for importance and impact"
+                        },
+                        "formatter": {
+                            "description": "Creates a structured report",
+                            "primary_task": f"Format {config_name} into a clear, organized report"
+                        },
+                        "reviewer": {
+                            "description": "Reviews report quality",
+                            "primary_task": "Review the report for quality and alignment with user needs"
+                        }
+                    }
+                }
+            }
     
-    def get_processing_options(self) -> ProcessingOptions:
+    def _get_default_issues_config(self) -> Dict[str, Any]:
         """
-        Get processing options from configuration or defaults.
+        Get default configuration for issues analysis.
         
         Returns:
-            ProcessingOptions object
+            Default issues configuration
         """
-        # Try to load options from config
-        options_config = self.get_config("processing_options")
-        
-        # If config exists, create from dict
-        if options_config:
-            try:
-                return ProcessingOptions.from_dict(options_config)
-            except Exception as e:
-                logger.error(f"Error creating ProcessingOptions from config: {e}")
-        
-        # Return default options
-        return ProcessingOptions()
+        return {
+            "crew_type": "issues",
+            "description": "Identifies problems, challenges, risks, and concerns in documents",
+            
+            "issue_definition": {
+                "description": "Any problem, challenge, risk, or concern that may impact objectives, efficiency, or quality",
+                "severity_levels": {
+                    "critical": "Immediate threat requiring urgent attention",
+                    "high": "Significant impact requiring prompt attention",
+                    "medium": "Moderate impact that should be addressed",
+                    "low": "Minor impact with limited consequences"
+                },
+                "categories": [
+                    "technical", "process", "resource", "quality", "risk", "compliance"
+                ]
+            },
+            
+            "workflow": {
+                "enabled_stages": ["document_analysis", "chunking", "planning", 
+                                "extraction", "aggregation", "evaluation", 
+                                "formatting", "review"],
+                "agent_roles": {
+                    "planner": {
+                        "description": "Plans the analysis approach",
+                        "primary_task": "Create tailored instructions for each agent based on document type and user preferences"
+                    },
+                    "extractor": {
+                        "description": "Identifies issues from document chunks",
+                        "primary_task": "Find all issues, assign initial severity, and provide relevant context",
+                        "output_schema": {
+                            "title": "Concise issue label",
+                            "description": "Detailed explanation of the issue",
+                            "severity": "Initial severity assessment (critical/high/medium/low)",
+                            "category": "Issue category from the defined list",
+                            "context": "Relevant information from the document"
+                        }
+                    },
+                    "aggregator": {
+                        "description": "Combines and deduplicates issues from all chunks",
+                        "primary_task": "Consolidate similar issues while preserving important distinctions"
+                    },
+                    "evaluator": {
+                        "description": "Assesses issue severity and priority",
+                        "primary_task": "Analyze each issue's impact and assign final severity and priority"
+                    },
+                    "formatter": {
+                        "description": "Creates the structured report",
+                        "primary_task": "Organize issues by severity and category into a clear report"
+                    },
+                    "reviewer": {
+                        "description": "Ensures quality and alignment with user needs",
+                        "primary_task": "Verify report quality and alignment with user preferences",
+                        "review_criteria": {
+                            "alignment": "Does the analysis align with user instructions and focus areas?",
+                            "completeness": "Does the report address all significant issues at the appropriate detail level?",
+                            "consistency": "Are severity ratings applied consistently throughout the analysis?",
+                            "clarity": "Is the report clear, well-organized, and actionable?",
+                            "balance": "Are issues presented in a balanced way without over or under-emphasis?"
+                        }
+                    }
+                }
+            },
+            
+            "user_options": {
+                "detail_levels": {
+                    "essential": "Focus only on the most significant issues",
+                    "standard": "Balanced analysis of important issues",
+                    "comprehensive": "In-depth analysis of all potential issues"
+                },
+                "focus_areas": {
+                    "technical": "Implementation, architecture, technology issues",
+                    "process": "Workflow, procedure, methodology issues",
+                    "resource": "Staffing, budget, time, materials constraints",
+                    "quality": "Standards, testing, performance concerns",
+                    "risk": "Compliance, security, strategic risks"
+                }
+            },
+            
+            "report_format": {
+                "sections": [
+                    "Executive Summary",
+                    "Critical Issues",
+                    "High-Priority Issues", 
+                    "Medium-Priority Issues",
+                    "Low-Priority Issues"
+                ],
+                "issue_presentation": {
+                    "title": "Clear, descriptive title",
+                    "severity": "Visual indicator of severity",
+                    "description": "Full issue description",
+                    "impact": "Potential consequences",
+                    "category": "Issue category"
+                }
+            }
+        }
     
-    def save_processing_options(self, options: ProcessingOptions) -> bool:
+    def save_config(self, config_name: str, config: Dict[str, Any]) -> bool:
         """
-        Save processing options to configuration.
+        Save configuration to file.
         
         Args:
-            options: ProcessingOptions object
+            config_name: Name of the configuration
+            config: Configuration dictionary
             
         Returns:
             True if successful, False otherwise
         """
-        options_dict = options.to_dict()
-        path = self.save_config("processing_options", options_dict)
-        return path is not None
-    
-    def create_options_from_dict(self, options_dict: Dict[str, Any]) -> ProcessingOptions:
-        """
-        Create ProcessingOptions from a dictionary.
+        # Ensure config directory exists
+        os.makedirs(self.config_dir, exist_ok=True)
         
-        Args:
-            options_dict: Dictionary with options
+        # Generate file path
+        config_file = self.config_dir / f"{config_name}_config.json"
+        
+        try:
+            # Save the configuration
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2)
             
-        Returns:
-            ProcessingOptions object
-        """
-        return ProcessingOptions.from_dict(options_dict)
+            # Update cache
+            self.configs[config_name] = config
+            
+            logger.info(f"Config '{config_name}' saved successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error saving config '{config_name}': {e}")
+            return False

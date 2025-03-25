@@ -1,7 +1,6 @@
-# agents/planner.py
 """
 Planner Agent - Creates optimized, document-aware instructions for specialized agents.
-Works within the IssuesCrew and leverages ProcessingContext.
+Simplified implementation that leverages the new BaseAgent architecture.
 """
 
 import json
@@ -16,7 +15,7 @@ logger = logging.getLogger(__name__)
 class PlannerAgent(BaseAgent):
     """
     Agent that creates tailored plans for document analysis.
-    Now designed to work within the IssuesCrew and use ProcessingContext.
+    Simplified implementation with cleaner configuration access and improved error handling.
     """
     
     def __init__(
@@ -49,25 +48,20 @@ class PlannerAgent(BaseAgent):
             context: ProcessingContext object
             
         Returns:
-            Planning result
+            Planning result with instructions for each agent
         """
-        # Extract document info and user preferences from context
-        document_info = context.document_info
-        user_preferences = {
-            "detail_level": context.options.get("detail_level", "standard"),
-            "focus_areas": context.options.get("focus_areas", []),
-            "user_instructions": context.options.get("user_instructions", "")
-        }
-        
-        # Create plan
-        plan = self.create_plan(document_info, user_preferences, self.crew_type)
+        # Execute planning
+        plan = await self.create_plan(
+            document_info=context.document_info,
+            user_preferences=context.options,
+            crew_type=self.crew_type
+        )
         
         # Store plan in context
         context.agent_instructions = plan
         
         return plan
     
-    # In agents/planner.py:
     async def create_plan(
         self, 
         document_info: Dict[str, Any],
@@ -85,179 +79,26 @@ class PlannerAgent(BaseAgent):
         Returns:
             Plan dictionary with instructions for each agent
         """
-        start_time = datetime.now()
-        
-        # Extract essential document info to reduce token usage
-        simplified_doc_info = self._simplify_document_info(document_info)
-        
-        # Extract user preference details
-        detail_level = user_preferences.get("detail_level", "standard")
-        focus_areas = user_preferences.get("focus_areas", [])
-        user_instructions = user_preferences.get("user_instructions", "")
-        
-        # Get the agent role definitions from config based on crew type
-        role_definitions = self._get_agent_role_definitions(crew_type)
-        
-        # Create prompt with configuration-aware instructions
-        prompt = self._build_planning_prompt(
-            crew_type, 
-            simplified_doc_info, 
-            detail_level, 
-            focus_areas, 
-            user_instructions, 
-            role_definitions
-        )
-        
-        try:
-            # Get planning result from LLM - ADD AWAIT HERE IF THIS IS ASYNC
-            logger.info(f"Creating plan for {crew_type} crew")
-            planning_result = await self.llm_client.generate_completion_async(prompt)
+        with self.execution_tracking():
+            # Get the available agent types for this crew
+            agent_types = self._get_agent_types()
             
-            # Parse the result
-            plan = self._parse_planning_result(planning_result, crew_type, user_preferences)
+            # Create a planning context
+            planning_context = {
+                "document_info": document_info,
+                "user_preferences": user_preferences,
+                "crew_type": crew_type,
+                "agent_types": agent_types,
+                "issue_definition": self.config.get("issue_definition", {})
+            }
             
-            # Calculate execution time
-            execution_time = (datetime.now() - start_time).total_seconds()
-            logger.info(f"Successfully created plan in {execution_time:.2f}s")
+            # Execute the planning task
+            result = await self.execute_task(planning_context)
             
-            return plan
-                
-        except Exception as e:
-            logger.error(f"Error in plan creation: {str(e)}")
-            return self._create_fallback_plan(crew_type, user_preferences)
-    
-    def _simplify_document_info(self, document_info: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract only the most relevant information from document_info."""
-        insights = {
-            "document_type": "transcript" if document_info.get("is_meeting_transcript", False) else "document",
-            "length": document_info.get("original_text_length", 0)
-        }
-        
-        # Get summary if available
-        if "preview_analysis" in document_info and "summary" in document_info["preview_analysis"]:
-            insights["summary"] = document_info["preview_analysis"]["summary"]
-        
-        # Get key topics if available
-        if "preview_analysis" in document_info and "key_topics" in document_info["preview_analysis"]:
-            insights["key_topics"] = document_info["preview_analysis"]["key_topics"][:5]  # Top 5 only
-        
-        # Get document stats
-        if "basic_stats" in document_info:
-            stats = document_info["basic_stats"]
-            insights["word_count"] = stats.get("word_count", 0)
-            insights["sentence_count"] = stats.get("sentence_count", 0)
-        
-        return insights
-    
-    def _get_agent_role_definitions(self, crew_type: str) -> str:
-        """Get agent role definitions based on crew type from configuration."""
-        # Get the agents section from config
-        crew_config = self.config
-        agents_config = crew_config.get("agents", {})
-        
-        # Build role definitions string from config
-        roles = []
-        for agent_type, config in agents_config.items():
-            role = config.get("role", f"{agent_type.title()} Agent")
-            goal = config.get("goal", f"Process {crew_type}")
+            # Ensure result is in the correct format
+            plan = self._normalize_plan_format(result, agent_types)
             
-            roles.append(f"{agent_type.upper()} AGENT: {role}\n  Goal: {goal}")
-        
-        if not roles:
-            # If no roles defined in config, use default roles
-            return self._get_default_role_definitions(crew_type)
-            
-        return "\n\n".join(roles)
-    
-    def _get_default_role_definitions(self, crew_type: str) -> str:
-        """Get default role definitions when not available in config."""
-        default_roles = {
-            "extraction": f"{crew_type.title()} Extractor - Identifies items in document chunks",
-            "aggregation": f"{crew_type.title()} Aggregator - Combines and deduplicates items",
-            "evaluation": f"{crew_type.title()} Evaluator - Assesses importance and impact",
-            "formatting": "Report Formatter - Creates clear, structured reports",
-            "reviewer": "Analysis Reviewer - Ensures quality and alignment with user needs"
-        }
-        
-        roles = []
-        for agent_type, role in default_roles.items():
-            roles.append(f"{agent_type.upper()} AGENT: {role}")
-        
-        return "\n\n".join(roles)
-    
-    def _build_planning_prompt(
-        self, 
-        crew_type: str, 
-        doc_insights: Dict[str, Any],
-        detail_level: str,
-        focus_areas: List[str],
-        user_instructions: str,
-        role_definitions: str
-    ) -> str:
-        """Build the planning prompt for the LLM."""
-        return f"""
-        You are an expert Planner who creates tailored instructions for AI agents.
-        
-        DOCUMENT INFORMATION:
-        {json.dumps(doc_insights, indent=2)}
-        
-        USER PREFERENCES:
-        - Detail Level: {detail_level}
-        - Focus Areas: {', '.join(focus_areas) if focus_areas else 'None specified'}
-        - User Instructions: {user_instructions}
-        
-        CREW TYPE: {crew_type}
-        
-        Your task is to create specialized instructions for each agent in the analysis crew.
-        Each agent has a specific role in the analysis process:
-        
-        {role_definitions}
-        
-        For each agent, provide:
-        - instructions: Clear guidance tailored to their specific role and this document
-        - emphasis: Aspects they should particularly focus on for this document
-        
-        Your instructions should incorporate:
-        - The document type and characteristics
-        - The user's desired detail level ({detail_level})
-        - The specified focus areas
-        - Any specific user instructions
-        
-        Return your response in this JSON format:
-        {{
-          "extraction": {{ "instructions": "...", "emphasis": "..." }},
-          "aggregation": {{ "instructions": "...", "emphasis": "..." }},
-          "evaluation": {{ "instructions": "...", "emphasis": "..." }},
-          "formatting": {{ "instructions": "...", "emphasis": "..." }},
-          "reviewer": {{ "instructions": "...", "emphasis": "..." }}
-        }}
-        """
-    
-    def _parse_planning_result(
-        self,
-        planning_result: str,
-        crew_type: str,
-        user_preferences: Dict[str, Any]
-    ) -> Dict[str, Dict[str, str]]:
-        """Parse the planning result from the LLM."""
-        try:
-            # Extract JSON portion if needed
-            if "{" in planning_result and "}" in planning_result:
-                json_start = planning_result.find("{")
-                json_end = planning_result.rfind("}") + 1
-                json_str = planning_result[json_start:json_end]
-                plan = json.loads(json_str)
-            else:
-                plan = json.loads(planning_result)
-            
-            # Validate all required agents are present
-            required_agents = ["extraction", "aggregation", "evaluation", "formatting", "reviewer"]
-            for agent in required_agents:
-                if agent not in plan:
-                    # Use fallback for missing agent
-                    plan[agent] = self._create_fallback_instructions(agent, crew_type, user_preferences)
-            
-            # Add metadata to plan
+            # Add metadata
             plan["_metadata"] = {
                 "created_at": datetime.now().isoformat(),
                 "crew_type": crew_type,
@@ -265,127 +106,185 @@ class PlannerAgent(BaseAgent):
             }
             
             return plan
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse planning result as JSON")
-            return self._create_fallback_plan(crew_type, user_preferences)
     
-    def _create_fallback_plan(
-        self, 
-        crew_type: str, 
-        user_preferences: Dict[str, Any]
-    ) -> Dict[str, Dict[str, str]]:
-        """Create a fallback plan when LLM planning fails."""
-        logger.warning(f"Using fallback plan for {crew_type} crew")
+    def _get_agent_types(self) -> List[str]:
+        """
+        Get the list of agent types configured for this crew.
         
-        # Create fallback instructions for each agent
-        plan = {
-            "extraction": self._create_fallback_instructions("extraction", crew_type, user_preferences),
-            "aggregation": self._create_fallback_instructions("aggregation", crew_type, user_preferences),
-            "evaluation": self._create_fallback_instructions("evaluation", crew_type, user_preferences),
-            "formatting": self._create_fallback_instructions("formatting", crew_type, user_preferences),
-            "reviewer": self._create_fallback_instructions("reviewer", crew_type, user_preferences)
-        }
+        Returns:
+            List of agent type strings
+        """
+        # Get from workflow configuration
+        stages = self.config.get("workflow", {}).get("enabled_stages", [])
         
-        # Add metadata
-        plan["_metadata"] = {
-            "created_at": datetime.now().isoformat(),
-            "crew_type": crew_type,
-            "is_fallback": True
-        }
+        # Filter to just agent stages (not document_analysis or chunking)
+        agent_stages = [stage for stage in stages if stage not in ["document_analysis", "chunking"]]
+        
+        # Return agent types or default set if not configured
+        if agent_stages:
+            return agent_stages
+        
+        # Default agent types
+        return ["planner", "extractor", "aggregator", "evaluator", "formatter", "reviewer"]
+    
+    def _normalize_plan_format(self, plan_result: Any, agent_types: List[str]) -> Dict[str, Dict[str, str]]:
+        """
+        Ensure the plan result is in the expected format.
+        
+        Args:
+            plan_result: Result from LLM planning
+            agent_types: List of agent types to include
+            
+        Returns:
+            Normalized plan dictionary
+        """
+        # If result is a string, try to parse as JSON
+        if isinstance(plan_result, str):
+            try:
+                plan_dict = self.parse_llm_json(plan_result, {})
+            except:
+                # If JSON parsing fails, create a simple instruction-only plan
+                return self._create_basic_plan(agent_types)
+        else:
+            # Use result directly
+            plan_dict = plan_result if isinstance(plan_result, dict) else {}
+        
+        # Check if we have a valid plan for each agent type
+        for agent_type in agent_types:
+            if agent_type not in plan_dict or not isinstance(plan_dict[agent_type], dict):
+                # Create basic instruction for this agent
+                plan_dict[agent_type] = self._create_agent_instructions(agent_type)
+            else:
+                # Ensure required fields exist
+                agent_plan = plan_dict[agent_type]
+                if "instructions" not in agent_plan:
+                    agent_plan["instructions"] = self._get_default_instructions(agent_type)
+                if "emphasis" not in agent_plan:
+                    agent_plan["emphasis"] = ""
+        
+        return plan_dict
+    
+    def _create_basic_plan(self, agent_types: List[str]) -> Dict[str, Dict[str, str]]:
+        """
+        Create a basic plan with default instructions for each agent.
+        
+        Args:
+            agent_types: List of agent types to include
+            
+        Returns:
+            Basic plan dictionary
+        """
+        plan = {}
+        for agent_type in agent_types:
+            plan[agent_type] = self._create_agent_instructions(agent_type)
         
         return plan
     
-    def _create_fallback_instructions(
-        self, 
-        agent_type: str, 
-        crew_type: str, 
-        user_preferences: Dict[str, Any]
-    ) -> Dict[str, str]:
-        """Create fallback instructions for a specific agent."""
-        # Extract preferences
-        detail_level = user_preferences.get("detail_level", "standard")
-        focus_areas = user_preferences.get("focus_areas", [])
-        user_instructions = user_preferences.get("user_instructions", "")
+    def _create_agent_instructions(self, agent_type: str) -> Dict[str, str]:
+        """
+        Create instructions for a specific agent using config.
         
-        # Build base instruction
-        base_instruction = f"Analyze with {detail_level} level of detail."
-        if focus_areas:
-            base_instruction += f" Focus on these areas: {', '.join(focus_areas)}."
-        if user_instructions:
-            base_instruction += f" User instructions: {user_instructions}"
-        
-        # Agent-specific instructions by crew type
-        instructions_map = {
-            "extraction": {
-                "issues": f"Identify potential issues in this document chunk. {base_instruction}",
-                "actions": f"Extract action items from this document chunk. {base_instruction}",
-                "default": f"Extract relevant information from this document chunk. {base_instruction}"
-            },
-            "aggregation": {
-                "issues": f"Combine similar issues while preserving important distinctions. {base_instruction}",
-                "actions": f"Group related action items and remove duplicates. {base_instruction}",
-                "default": f"Consolidate similar items from all chunks. {base_instruction}"
-            },
-            "evaluation": {
-                "issues": f"Assess the severity and impact of each issue. {base_instruction}",
-                "actions": f"Prioritize action items by importance. {base_instruction}",
-                "default": f"Evaluate the importance of each item. {base_instruction}"
-            },
-            "formatting": {
-                "issues": f"Create a structured report grouped by severity. {base_instruction}",
-                "actions": f"Create an organized action items report. {base_instruction}",
-                "default": f"Format findings into a clear report. {base_instruction}"
-            },
-            "reviewer": {
-                "issues": f"Review for quality, accuracy and alignment with user needs. {base_instruction}",
-                "actions": f"Verify completeness and clarity of action items. {base_instruction}",
-                "default": f"Check quality and completeness of the report. {base_instruction}"
-            }
-        }
-        
-        # Get appropriate instruction
-        agent_map = instructions_map.get(agent_type, {})
-        instructions = agent_map.get(crew_type, agent_map.get("default", f"Process the {crew_type} data. {base_instruction}"))
-        
-        # Create emphasis based on detail level
-        emphasis_map = {
-            "essential": "Focus only on the most important elements.",
-            "standard": "Balance detail and conciseness.",
-            "comprehensive": "Provide thorough analysis with comprehensive detail."
-        }
-        emphasis = emphasis_map.get(detail_level, "Balance detail and conciseness.")
-        
-        # Add focus areas to emphasis
-        if focus_areas:
-            emphasis += f" Pay special attention to: {', '.join(focus_areas)}."
+        Args:
+            agent_type: Type of agent
+            
+        Returns:
+            Instructions dictionary
+        """
+        # Get role information from config
+        role_info = self.config.get("workflow", {}).get("agent_roles", {}).get(agent_type, {})
         
         return {
-            "instructions": instructions,
-            "emphasis": emphasis
+            "instructions": role_info.get("primary_task", self._get_default_instructions(agent_type)),
+            "emphasis": self._get_default_emphasis()
         }
     
-    def _get_stage_specific_content(self, context) -> str:
-        """Get stage-specific content for the prompt."""
-        document_info = context.document_info
-        user_preferences = {
-            "detail_level": context.options.get("detail_level", "standard"),
-            "focus_areas": context.options.get("focus_areas", []),
-            "user_instructions": context.options.get("user_instructions", "")
+    def _get_default_instructions(self, agent_type: str) -> str:
+        """
+        Get default instructions for an agent type.
+        
+        Args:
+            agent_type: Type of agent
+            
+        Returns:
+            Default instruction string
+        """
+        # Default instructions by agent type
+        defaults = {
+            "extractor": f"Identify {self.crew_type} in each document chunk",
+            "aggregator": f"Combine similar {self.crew_type} from all document chunks",
+            "evaluator": f"Evaluate the severity and impact of each {self.crew_type}",
+            "formatter": f"Create a clear, organized report of {self.crew_type}",
+            "reviewer": "Review the analysis for quality and alignment with user needs"
         }
         
-        # Get role definitions for the crew
-        role_definitions = self._get_agent_role_definitions(self.crew_type)
-        
-        # Return as formatted string
-        return f"""
-        DOCUMENT INFORMATION:
-        {json.dumps(self._simplify_document_info(document_info), indent=2)}
-        
-        USER PREFERENCES:
-        - Detail Level: {user_preferences.get('detail_level')}
-        - Focus Areas: {', '.join(user_preferences.get('focus_areas', [])) or 'None specified'}
-        - User Instructions: {user_preferences.get('user_instructions', '')}
-        
-        AGENT ROLES:
-        {role_definitions}
+        return defaults.get(agent_type, f"Process {self.crew_type} data")
+    
+    def _get_default_emphasis(self) -> str:
         """
+        Get default emphasis based on crew type.
+        
+        Returns:
+            Default emphasis string
+        """
+        emphasis_map = {
+            "issues": "Focus on identifying problems that impact objectives or efficiency",
+            "actions": "Focus on clear, actionable items with ownership and deadlines",
+            "insights": "Focus on extracting meaningful patterns and observations"
+        }
+        
+        return emphasis_map.get(self.crew_type, "")
+    
+    def _get_stage_specific_content(self, context) -> str:
+        """
+        Get stage-specific content for the planning prompt.
+        
+        Args:
+            context: Planning context
+            
+        Returns:
+            Stage-specific content string
+        """
+        # Extract info from context
+        if isinstance(context, dict):
+            agent_types = context.get("agent_types", [])
+            issue_definition = context.get("issue_definition", {})
+            
+            # Create agent roles description
+            agent_roles = []
+            for agent_type in agent_types:
+                role_info = self.config.get("workflow", {}).get("agent_roles", {}).get(agent_type, {})
+                
+                # Skip planner itself
+                if agent_type == "planner":
+                    continue
+                    
+                description = role_info.get("description", f"{agent_type.capitalize()} Agent")
+                primary_task = role_info.get("primary_task", f"Process {self.crew_type}")
+                
+                agent_roles.append(f"{agent_type.upper()}: {description}\n  Primary task: {primary_task}")
+            
+            # Create issue definition text if applicable
+            issue_def_text = ""
+            if self.crew_type == "issues" and issue_definition:
+                issue_def_text = "ISSUE DEFINITION:\n"
+                issue_def_text += issue_definition.get('description', 'Any problem, challenge, risk, or concern')
+                issue_def_text += "\n\nSEVERITY LEVELS:\n"
+                
+                severity_levels = issue_definition.get("severity_levels", {})
+                for level, desc in severity_levels.items():
+                    issue_def_text += f"- {level}: {desc}\n"
+            
+            # Build the final content without using problematic indentation in f-strings
+            content = "AGENT ROLES:\n"
+            content += '\n\n'.join(agent_roles)
+            
+            if issue_def_text:
+                content += f"\n\n{issue_def_text}"
+            
+            content += "\n\nPLANNING TASK:\n"
+            content += "Create instructions for each agent type based on the document and user preferences.\n"
+            content += "For each agent, provide specific \"instructions\" and \"emphasis\" fields."
+            
+            return content
+        
+        return ""

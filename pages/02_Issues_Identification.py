@@ -1,7 +1,7 @@
 """
-Issues Identification Page - Better Notes
+Issues Analysis Page - Better Notes
 Identifies problems, challenges, and risks in documents using the enhanced architecture.
-Uses the improved Orchestrator with ProcessingContext and IssuesCrew with integrated Planner.
+Uses the new Orchestrator with ProcessingContext and IssuesCrew with integrated Planner.
 """
 
 import os
@@ -17,9 +17,8 @@ from typing import Dict, Any, Optional, List, Union
 import streamlit as st
 import asyncio
 
-
-# Import core components
-from orchestrator import Orchestrator
+# Import core components with new architecture
+from orchestrator import Orchestrator, ProcessingContext
 from orchestrator_factory import OrchestratorFactory
 from config_manager import ConfigManager
 
@@ -216,7 +215,7 @@ process_button = st.button(
     use_container_width=True
 )
 
-# Helper function to extract HTML content
+# Function to extract HTML content
 def extract_html_content(result: Any) -> str:
     """
     Extract HTML content from different result formats.
@@ -435,7 +434,20 @@ def process_document():
         # Create configuration manager
         config_manager = ConfigManager()
         
-        # Create the orchestrator using our factory
+        # Create options dictionary
+        options = {
+            "crew_type": "issues",
+            "detail_level": detail_map.get(detail_level, "standard"),
+            "focus_areas": [area.lower() for area in focus_areas],
+            "user_instructions": user_instructions,
+            "min_chunks": num_chunks,
+            "max_chunk_size": len(document_text) // num_chunks if num_chunks > 0 else 10000,
+            "enable_reviewer": enable_reviewer
+        }
+        
+        logger.info(f"Starting document processing with options: {json.dumps(options, default=str)}")
+        
+        # Create the orchestrator directly using the factory function
         orchestrator = OrchestratorFactory.create_orchestrator(
             api_key=api_key,
             model=selected_model,
@@ -449,28 +461,22 @@ def process_document():
         # Store LLM client for chat interface
         st.session_state.llm_client = orchestrator.llm_client
         
-        # Create processing options
-        options = {
-            "model_name": selected_model,
-            "temperature": temperature,
-            "crews": ["issues"],
-            "min_chunks": num_chunks,
-            "max_chunk_size": len(document_text) // num_chunks if num_chunks > 0 else 10000,
-            "max_rpm": max_rpm,
-            "enable_reviewer": enable_reviewer,
-            "detail_level": detail_map.get(detail_level, "standard"),
-            "focus_areas": [area.lower() for area in focus_areas],
-            "user_instructions": user_instructions
-        }
+        # Process document with progress tracking using the synchronous method
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         
-        logger.info("Starting document processing with enhanced architecture")
-        
-        # Process document with progress tracking
-        result = orchestrator.process_document_sync(
-            document_text,
-            options=options,
-            progress_callback=update_progress
-        )
+        try:
+            # Run the async method in the event loop
+            result = loop.run_until_complete(
+                orchestrator.process_document(
+                    document_text,
+                    options=options,
+                    progress_callback=update_progress
+                )
+            )
+        finally:
+            # Always close the loop
+            loop.close()
         
         # Show raw result in debug mode
         if debug_mode:
@@ -522,17 +528,24 @@ def process_document():
 
 # Function to display results
 def display_results(result, processing_time):
-    """Display the processing results with improved result handling."""
-    # Extract the HTML content or formatted result
-    result_text = extract_html_content(result)
-    
+    """Display the processing results using existing formatting utilities."""
     # Handle error results
     if isinstance(result, dict) and "error" in result:
         st.error(f"Error during processing: {result['error']}")
         return
     
+    # Extract the formatted report
+    formatted_report = None
+    if isinstance(result, dict) and "formatted_report" in result:
+        formatted_report = result["formatted_report"]
+    elif isinstance(result, str):
+        formatted_report = result
+    
     # Save the result to a file
-    saved_filepath = save_output_to_file(result_text)
+    if formatted_report:
+        saved_filepath = save_output_to_file(formatted_report)
+    else:
+        saved_filepath = save_output_to_file(result)
     
     # Show success message
     st.success(f"Analysis completed in {processing_time:.2f} seconds")
@@ -543,7 +556,7 @@ def display_results(result, processing_time):
         review_result = result["review_result"]
     
     # Create tabs for different views
-    result_tabs = st.tabs(["Report", "Chat with Document", "Adjust Analysis", "Technical Info"])
+    result_tabs = st.tabs(["Report", "Chat with Document", "Technical Info"])
     
     with result_tabs[0]:
         st.subheader("Issues Identification Results")
@@ -578,13 +591,15 @@ def display_results(result, processing_time):
                                 if isinstance(suggestion, dict):
                                     st.markdown(f"- **{suggestion.get('area', 'General')}**: {suggestion.get('suggestion', '')}")
         
-        # Display enhanced result
-        enhanced_html = enhance_result_display(result_text, "issues", detail_level.lower())
-        st.markdown(enhanced_html, unsafe_allow_html=True)
+        # Display formatted result using existing utilities
+        content_to_display = formatted_report or result
+        enhanced_content = enhance_result_display(content_to_display, "issues", detail_level.lower())
+        st.markdown(enhanced_content, unsafe_allow_html=True)
         
         # Download option
         st.divider()
-        create_download_button(result_text, os.path.basename(saved_filepath))
+        create_download_button(result, os.path.basename(saved_filepath))
+    
     
     with result_tabs[1]:
         st.subheader("Chat about this Issues Report")
@@ -593,88 +608,11 @@ def display_results(result, processing_time):
         display_chat_interface(
             llm_client=st.session_state.llm_client,
             document_text=document_text,
-            summary_text=result_text,
+            summary_text=formatted_report or json.dumps(result, indent=2),
             document_info=st.session_state.document_info
         )
     
     with result_tabs[2]:
-        st.subheader("Adjust Analysis Settings")
-        
-        # Create a form for reanalysis
-        with st.form("reanalysis_form"):
-            st.write("Adjust settings and provide new instructions to reanalyze the document")
-            
-            # Allow adjusting key parameters
-            new_detail_level = st.select_slider(
-                "Detail Level",
-                options=["Essential", "Standard", "Comprehensive"],
-                value=detail_level,
-                help="Controls the depth of the analysis"
-            )
-            
-            new_temperature = st.slider(
-                "Temperature", 
-                min_value=0.0, 
-                max_value=1.0, 
-                value=temperature,
-                step=0.1,
-                help="Higher values = more creative, lower = more consistent"
-            )
-            
-            new_num_chunks = st.slider(
-                "Number of Document Chunks",
-                min_value=3,
-                max_value=20,
-                value=num_chunks,
-                help="Number of sections to divide document into"
-            )
-            
-            # Instructions area
-            new_instructions = st.text_area(
-                "Analysis Instructions",
-                value=user_instructions,
-                height=100,
-                help="Based on the chat, what specific aspects would you like the analysis to focus on?"
-            )
-            
-            # Focus options for issues
-            new_focus_areas = st.multiselect(
-                "Focus Areas",
-                options=["Technical", "Process", "Resource", "Quality", "Risk"],
-                default=focus_areas,
-                help="Select specific types of issues to emphasize"
-            )
-            
-            # Reviewer option
-            new_enable_reviewer = st.checkbox(
-                "Enable Review Step",
-                value=enable_reviewer,
-                help="Final quality check of the analysis"
-            )
-            
-            # Reanalysis button
-            reanalyze_submitted = st.form_submit_button("Reanalyze Document", type="primary")
-        
-        if reanalyze_submitted:
-            # Update session state variables for the next run
-            st.session_state.detail_level = new_detail_level
-            st.session_state.temperature = new_temperature
-            st.session_state.num_chunks = new_num_chunks
-            st.session_state.user_instructions = new_instructions
-            st.session_state.focus_areas = new_focus_areas
-            st.session_state.enable_reviewer = new_enable_reviewer
-            
-            # Reset processing status
-            st.session_state.processing_complete = False
-            st.session_state.agent_result = None
-            
-            # Show processing message
-            st.info("Starting reanalysis with updated settings...")
-            
-            # Process document
-            process_document()
-    
-    with result_tabs[3]:
         st.subheader("Technical Information")
         
         # Document stats if available
@@ -738,7 +676,7 @@ def display_results(result, processing_time):
                 st.markdown("### Processing Metadata")
                 with st.expander("Processing Stats", expanded=False):
                     st.json(metadata_copy)
-
+                    
 # Run when process button is clicked
 if process_button:
     # Reset processing flags

@@ -1,11 +1,11 @@
-# agents/evaluator.py
 """
 Evaluator Agent - Specialized in assessing importance and impact of identified items.
-Works with ProcessingContext and integrated crew architecture.
+Clean implementation that leverages the new BaseAgent architecture.
 """
 
 import json
 import logging
+import re
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class EvaluatorAgent(BaseAgent):
     """
     Agent specialized in evaluating the importance, severity, or impact of identified items.
-    Enhances metadata with assessment information and works with ProcessingContext.
+    Enhances metadata with assessment information.
     """
     
     def __init__(
@@ -32,7 +32,7 @@ class EvaluatorAgent(BaseAgent):
         """Initialize an evaluator agent."""
         super().__init__(
             llm_client=llm_client,
-            agent_type="evaluation",
+            agent_type="evaluator",
             crew_type=crew_type,
             config=config,
             config_manager=config_manager,
@@ -54,15 +54,14 @@ class EvaluatorAgent(BaseAgent):
         # Get aggregation results from context
         aggregated_result = context.results.get("aggregation", {})
         
-        # Evaluate the results
-        evaluated_result = self.evaluate_items(
+        # Evaluate results
+        evaluated_result = await self.evaluate_items(
             aggregated_items=aggregated_result,
             document_info=context.document_info
         )
         
         return evaluated_result
     
-    # In agents/evaluator.py:
     async def evaluate_items(
         self, 
         aggregated_items: Dict[str, Any], 
@@ -70,123 +69,162 @@ class EvaluatorAgent(BaseAgent):
     ) -> Dict[str, Any]:
         """
         Evaluate aggregated items for severity, importance, or impact.
-        Adds assessment metadata to each item.
         
         Args:
             aggregated_items: Items to evaluate
             document_info: Optional document metadata
             
         Returns:
-            Evaluated items with ratings, rationales, and enhanced metadata
+            Evaluated items with ratings and rationales
         """
-        # Get evaluation criteria from config
-        criteria = self._get_evaluation_criteria()
+        # Get evaluation criteria
+        evaluation_criteria = self._get_evaluation_criteria()
         
-        # Prepare context for prompt building
-        context = {
+        # Prepare evaluation context
+        evaluation_context = {
             "aggregated_items": aggregated_items,
             "document_info": document_info or {},
-            "evaluation_criteria": criteria
+            "evaluation_criteria": evaluation_criteria,
+            "rating_field": self._get_rating_field_name()
         }
         
-        # Add rating scale information
-        context["rating_scale"] = self._get_rating_scale_description()
+        # Execute evaluation
+        result = await self.execute_task(evaluation_context)
         
-        # Execute the evaluation task - ADD AWAIT HERE
-        result = await self.execute_task(context=context)
-        
-        # Enhance the result with evaluation metadata
+        # Enhance result with metadata
         result = self._enhance_result_with_metadata(result, aggregated_items)
         
         return result
     
     def _get_stage_specific_content(self, context) -> str:
         """Get stage-specific content for the prompt."""
-        # If context is a dictionary with aggregated_items
         if isinstance(context, dict) and "aggregated_items" in context:
-            aggregated_items = context["aggregated_items"]
+            # Add evaluation criteria
+            content = "EVALUATION CRITERIA:\n"
             
-            # Get evaluation criteria if available
-            criteria_str = ""
-            if "evaluation_criteria" in context:
-                criteria = context["evaluation_criteria"]
-                criteria_str = "\n".join([f"- {level}: {desc}" for level, desc in criteria.items()])
+            # Add criteria information
+            criteria = context.get("evaluation_criteria", {})
+            for level, description in criteria.items():
+                content += f"- {level}: {description}\n"
             
-            # Get rating scale if available
-            rating_scale = context.get("rating_scale", "")
+            content += f"\nRATING FIELD: {context.get('rating_field', 'severity')}\n\n"
             
-            # Format aggregated items
-            items_summary = json.dumps(aggregated_items, indent=2, default=str)
+            # Add items to evaluate
+            aggregated_items = context.get("aggregated_items", {})
             
-            # Add truncation if too long
-            if len(items_summary) > 3000:
-                items_summary = items_summary[:3000] + "...\n[Output truncated]"
+            # Find the key field
+            input_field = None
+            for key in aggregated_items.keys():
+                if key.startswith("aggregated_"):
+                    input_field = key
+                    break
             
-            return f"""
-            AGGREGATED ITEMS:
-            {items_summary}
+            if input_field and input_field in aggregated_items:
+                items = aggregated_items[input_field]
+                
+                # Format items for the prompt
+                items_json = json.dumps(items, indent=2)
+                if len(items_json) > 3000:
+                    # Truncate if too long
+                    items_json = items_json[:3000] + "\n...(truncated for brevity)..."
+                
+                content += f"ITEMS TO EVALUATE:\n{items_json}\n"
             
-            EVALUATION CRITERIA:
-            {criteria_str}
-            
-            RATING SCALE:
-            {rating_scale}
-            """
+            return content
         
-        # Otherwise, return empty string
         return ""
     
     def _get_evaluation_criteria(self) -> Dict[str, str]:
         """
-        Get evaluation criteria from config based on crew type.
+        Get evaluation criteria based on crew type.
         
         Returns:
-            Dictionary of evaluation criteria
+            Dictionary of criteria
         """
-        # Try to get criteria from config
-        criteria = {}
+        # First try to get from config
+        if self.crew_type == "issues":
+            severity_levels = self.config.get("issue_definition", {}).get("severity_levels", {})
+            if severity_levels:
+                return severity_levels
         
-        # Look for criteria in analysis_definition section
-        if "analysis_definition" in self.config:
-            definition = self.config["analysis_definition"]
-            
-            # Get severity/importance/priority levels
-            for levels_key in ["severity_levels", "importance_levels", "priority_levels"]:
-                if levels_key in definition:
-                    criteria = definition[levels_key]
-                    break
-        
-        # If no criteria found, use defaults
-        if not criteria:
-            criteria = {
-                "high": f"Significant impact on objectives or outcomes, requires immediate attention",
-                "medium": f"Moderate impact that should be addressed but isn't urgent",
-                "low": f"Minor impact, could be addressed as part of normal operations"
+        # Default criteria if not in config
+        defaults = {
+            "issues": {
+                "critical": "Immediate threat requiring urgent attention",
+                "high": "Significant impact requiring prompt attention",
+                "medium": "Moderate impact that should be addressed",
+                "low": "Minor impact with limited consequences"
+            },
+            "actions": {
+                "high": "Essential for success, must be completed",
+                "medium": "Important but not critical",
+                "low": "Helpful but optional"
+            },
+            "opportunities": {
+                "high": "Significant potential benefit, strong ROI",
+                "medium": "Moderate potential benefit, good ROI",
+                "low": "Limited potential benefit, lower ROI"
+            },
+            "risks": {
+                "critical": "High probability and major impact",
+                "high": "High probability or major impact",
+                "medium": "Moderate probability and impact",
+                "low": "Low probability and limited impact"
             }
-            
-            # Add critical level for issues
-            if self.crew_type == "issues":
-                criteria["critical"] = "Immediate threat or blockage that must be addressed immediately"
-        
-        return criteria
-    
-    def _get_rating_scale_description(self) -> str:
-        """
-        Get a description of the rating scale based on crew type.
-        
-        Returns:
-            Description of the rating scale
-        """
-        # Default rating descriptions by crew type
-        rating_descriptions = {
-            "issues": "Severity rating indicates the potential negative impact if the issue is not addressed",
-            "actions": "Priority rating indicates the urgency and importance of completing the action",
-            "opportunities": "Value rating indicates the potential benefit if the opportunity is pursued",
-            "risks": "Risk rating indicates the combination of probability and impact"
         }
         
-        # Get appropriate description or default
-        return rating_descriptions.get(self.crew_type, "Rating indicates the relative importance")
+        return defaults.get(self.crew_type, {"high": "Important", "medium": "Moderate", "low": "Minor"})
+    
+    def _get_rating_field_name(self) -> str:
+        """
+        Get the name of the rating field based on crew type.
+        
+        Returns:
+            Rating field name
+        """
+        # Map crew types to rating field names
+        field_map = {
+            "issues": "severity",
+            "actions": "priority",
+            "opportunities": "value",
+            "risks": "risk_level"
+        }
+        
+        return field_map.get(self.crew_type, "rating")
+    
+    def _get_input_field_name(self) -> str:
+        """
+        Get the field name for input aggregated items.
+        
+        Returns:
+            Field name for input items
+        """
+        # Map crew types to input field names
+        field_map = {
+            "issues": "aggregated_issues",
+            "actions": "aggregated_action_items",
+            "opportunities": "aggregated_opportunities",
+            "risks": "aggregated_risks"
+        }
+        
+        return field_map.get(self.crew_type, f"aggregated_{self.crew_type}_items")
+    
+    def _get_output_field_name(self) -> str:
+        """
+        Get the field name for evaluated output items.
+        
+        Returns:
+            Field name for output items
+        """
+        # Map crew types to output field names
+        field_map = {
+            "issues": "evaluated_issues",
+            "actions": "evaluated_actions",
+            "opportunities": "evaluated_opportunities",
+            "risks": "evaluated_risks"
+        }
+        
+        return field_map.get(self.crew_type, f"evaluated_{self.crew_type}_items")
     
     def _enhance_result_with_metadata(self, result: Any, aggregated_items: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -199,91 +237,84 @@ class EvaluatorAgent(BaseAgent):
         Returns:
             Enhanced result with metadata
         """
-        # Handle string results
+        # Ensure result is a dictionary
         if isinstance(result, str):
             try:
                 # Try to parse as JSON
-                parsed_result = json.loads(result)
+                parsed_result = self.parse_llm_json(result)
                 if isinstance(parsed_result, dict):
                     result = parsed_result
-            except json.JSONDecodeError:
-                # Not JSON, convert to basic dictionary
-                key_field = self.get_key_field()
-                result = {
-                    key_field: [{"description": result}]
-                }
+                else:
+                    # Create basic structure
+                    result = {self._get_output_field_name(): [{"description": result}]}
+            except Exception:
+                # Not valid JSON, create basic structure
+                result = {self._get_output_field_name(): [{"description": result}]}
         
         # Handle non-dictionary results
         if not isinstance(result, dict):
-            key_field = self.get_key_field()
-            result = {
-                key_field: [{"description": str(result)}]
-            }
+            result = {self._get_output_field_name(): [{"description": str(result)}]}
         
-        # Ensure the key field exists
-        key_field = self.get_key_field()
-        if key_field not in result:
-            result[key_field] = []
+        # Ensure output field exists
+        output_field = self._get_output_field_name()
+        if output_field not in result:
+            result[output_field] = []
         
-        # Analyze ratings distribution
-        items = result[key_field]
-        rating_distribution = {}
+        # Get rating field name
+        rating_field = self._get_rating_field_name()
         
-        # Get input items to map metadata
-        input_key_field = self._get_input_key_field()
+        # Add original metadata from input items
+        items = result[output_field]
+        input_field = self._get_input_field_name()
         input_items = []
-        if isinstance(aggregated_items, dict) and input_key_field in aggregated_items:
-            input_items = aggregated_items[input_key_field]
-            if not isinstance(input_items, list):
-                input_items = []
         
-        # Create lookup for input items
+        if input_field in aggregated_items and isinstance(aggregated_items[input_field], list):
+            input_items = aggregated_items[input_field]
+        
+        # Create a lookup for input items
         input_lookup = {}
         for item in input_items:
-            if isinstance(item, dict):
-                item_title = item.get("title", "")
-                if item_title:
-                    input_lookup[item_title] = item
+            if isinstance(item, dict) and "title" in item:
+                input_lookup[item["title"]] = item
         
+        # Transfer metadata and add missing fields
         if isinstance(items, list):
-            # Analyze rating distribution
+            # Track rating distribution
+            rating_distribution = {}
+            
             for item in items:
                 if not isinstance(item, dict):
                     continue
                 
-                # Get the rating field name based on crew type
-                rating_field = self._get_rating_field_name()
-                
-                if rating_field in item:
-                    rating = item[rating_field]
-                    if rating not in rating_distribution:
-                        rating_distribution[rating] = 0
-                    rating_distribution[rating] += 1
-                
-                # Transfer metadata from input item
+                # Get the title to match with input items
                 title = item.get("title", "")
-                if title and title in input_lookup:
+                
+                # Find matching input item
+                if title in input_lookup:
                     input_item = input_lookup[title]
                     
                     # Copy metadata that shouldn't change during evaluation
-                    for field in ["mention_count", "source_chunks", "keywords"]:
+                    for field in ["mention_count", "source_chunks", "keywords", "confidence"]:
                         if field in input_item and field not in item:
                             item[field] = input_item[field]
                 
-                # Add priority if not present (numeric value based on rating)
+                # Add numeric priority if not present
                 if "priority" not in item and rating_field in item:
                     item["priority"] = self._rating_to_priority(item[rating_field])
                 
                 # Add impact assessment if not present
                 if "impact_assessment" not in item and "description" in item and rating_field in item:
                     item["impact_assessment"] = self._generate_impact_assessment(
-                        item["description"], 
-                        item[rating_field]
+                        item.get("description", ""),
+                        item.get(rating_field, "")
                     )
                 
-                # Add related items if not present
-                if "related_items" not in item:
-                    item["related_items"] = []
+                # Track rating distribution
+                if rating_field in item:
+                    rating = item[rating_field]
+                    if rating not in rating_distribution:
+                        rating_distribution[rating] = 0
+                    rating_distribution[rating] += 1
         
         # Add evaluation metadata
         result["_metadata"] = {
@@ -294,71 +325,16 @@ class EvaluatorAgent(BaseAgent):
         
         return result
     
-    def get_key_field(self) -> str:
-        """
-        Get the key field name for the evaluated items based on crew type.
-        
-        Returns:
-            Field name for evaluated items
-        """
-        # Default mapping
-        field_mapping = {
-            "issues": "evaluated_issues",
-            "actions": "evaluated_actions",
-            "opportunities": "evaluated_opportunities",
-            "risks": "evaluated_risks"
-        }
-        
-        # Get from config if available
-        return field_mapping.get(self.crew_type, f"evaluated_{self.crew_type}_items")
-    
-    def _get_input_key_field(self) -> str:
-        """
-        Get the key field name for the input aggregated items.
-        
-        Returns:
-            Field name for input items
-        """
-        # Default mapping
-        field_mapping = {
-            "issues": "aggregated_issues",
-            "actions": "aggregated_action_items",
-            "opportunities": "aggregated_opportunities",
-            "risks": "aggregated_risks"
-        }
-        
-        # Get from config if available
-        return field_mapping.get(self.crew_type, f"aggregated_{self.crew_type}_items")
-    
-    def _get_rating_field_name(self) -> str:
-        """
-        Get the name of the rating field based on crew type.
-        
-        Returns:
-            Name of the rating field
-        """
-        # Default mapping
-        field_mapping = {
-            "issues": "severity",
-            "actions": "priority",
-            "opportunities": "value",
-            "risks": "risk_level"
-        }
-        
-        # Get from config if available
-        return field_mapping.get(self.crew_type, "rating")
-    
     def _rating_to_priority(self, rating: str) -> int:
         """
         Convert a rating to a numeric priority.
         
         Args:
-            rating: Rating string (e.g., "critical", "high", "medium", "low")
+            rating: Rating string
             
         Returns:
             Numeric priority (lower is higher priority)
         """
-        # Map ratings to numeric priorities (lower numbers = higher priority)
         priority_map = {
             "critical": 1,
             "high": 2,
@@ -370,7 +346,7 @@ class EvaluatorAgent(BaseAgent):
     
     def _generate_impact_assessment(self, description: str, rating: str) -> str:
         """
-        Generate a simple impact assessment based on the description and rating.
+        Generate a simple impact assessment based on description and rating.
         
         Args:
             description: Item description
@@ -379,14 +355,12 @@ class EvaluatorAgent(BaseAgent):
         Returns:
             Impact assessment text
         """
-        # Generate a simple impact assessment based on rating
-        if rating.lower() == "critical":
-            return f"Severe impact that could significantly damage objectives or operations if not addressed immediately."
-        elif rating.lower() == "high":
-            return f"Substantial impact requiring prompt attention to prevent significant negative consequences."
-        elif rating.lower() == "medium":
-            return f"Moderate impact that should be addressed to improve effectiveness and efficiency."
-        elif rating.lower() == "low":
-            return f"Minor impact that could be addressed as part of normal improvements."
-        else:
-            return f"Impact level is unclear and requires further assessment."
+        # Basic assessments by rating level
+        assessments = {
+            "critical": "Critical impact that could severely damage objectives if not addressed immediately.",
+            "high": "Significant impact requiring prompt attention to prevent negative outcomes.",
+            "medium": "Moderate impact that should be addressed to improve effectiveness.",
+            "low": "Minor impact that could be addressed as part of regular improvements."
+        }
+        
+        return assessments.get(rating.lower(), "Impact level requires further assessment.")

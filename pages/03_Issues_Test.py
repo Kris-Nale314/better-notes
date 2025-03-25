@@ -1,7 +1,6 @@
 """
-Issues Test Script - Debug tool for Better Notes.
-Provides enhanced logging and step-by-step execution to identify issues
-in the document processing pipeline.
+New Issues Analysis Test - Better Notes
+Test page for the new Issues Crew implementation with clean architecture.
 """
 
 import os
@@ -11,379 +10,679 @@ import logging
 import json
 import traceback
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+import tempfile
+from typing import Dict, Any, Optional, List, Union
 
-# Set up detailed logging
+import streamlit as st
+import asyncio
+
+# Import core components
+from orchestrator import Orchestrator, ProcessingContext
+from orchestrator_factory import OrchestratorFactory
+from config_manager import ConfigManager
+
+# Import UI utilities
+from ui_utils.core_styling import apply_component_styles, apply_analysis_styles
+from ui_utils.result_formatting import enhance_result_display, create_download_button
+from ui_utils.chat_interface import display_chat_interface
+from ui_utils.progress_tracking import create_progress_callback
+
+# Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("debug_log.txt", mode="w")
+        logging.FileHandler("new_issues_test.log", mode="a")
     ]
 )
+logger = logging.getLogger("new_issues_test")
 
-logger = logging.getLogger("issues_test")
-logger.info("Starting Issues Test Script")
+# Configure page
+st.set_page_config(
+    page_title="New Issues Analysis - Better Notes",
+    page_icon="🚀",
+    layout="wide"
+)
 
-# Attempt to import key components with detailed error reporting
-logger.info("Attempting to import core components")
+# Apply styling
+apply_component_styles()
+apply_analysis_styles("issues")
 
-def import_with_logging(module_name, class_name=None):
-    """Import a module or class with detailed logging."""
-    try:
-        logger.info(f"Importing {module_name}{f'.{class_name}' if class_name else ''}")
-        if class_name:
-            module = __import__(module_name, fromlist=[class_name])
-            component = getattr(module, class_name)
-            logger.info(f"Successfully imported {module_name}.{class_name}")
-            return component
-        else:
-            module = __import__(module_name, fromlist=["*"])
-            logger.info(f"Successfully imported {module_name}")
-            return module
-    except ImportError as e:
-        logger.error(f"Failed to import {module_name}{f'.{class_name}' if class_name else ''}: {e}")
-        logger.error(f"Current sys.path: {sys.path}")
-        return None
-    except AttributeError as e:
-        logger.error(f"Module {module_name} doesn't have attribute {class_name}: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error importing {module_name}{f'.{class_name}' if class_name else ''}: {e}")
-        logger.error(traceback.format_exc())
-        return None
+# Setup output directory
+OUTPUT_DIR = Path("outputs")
+OUTPUT_DIR.mkdir(exist_ok=True)
+(OUTPUT_DIR / "new_issues_test").mkdir(exist_ok=True)
 
-# Try to import core components
-ConfigManager = import_with_logging("config_manager", "ConfigManager")
-ProcessingOptions = import_with_logging("config_manager", "ProcessingOptions")
-UniversalLLMAdapter = import_with_logging("universal_llm_adapter", "UniversalLLMAdapter")
-OrchestratorFactory = import_with_logging("orchestrator_factory", "OrchestratorFactory")
+# Initialize session state
+if "processing_complete" not in st.session_state:
+    st.session_state.processing_complete = False
+if "agent_result" not in st.session_state:
+    st.session_state.agent_result = None
+if "processing_time" not in st.session_state:
+    st.session_state.processing_time = 0
+if "document_info" not in st.session_state:
+    st.session_state.document_info = None
+if "document_text" not in st.session_state:
+    st.session_state.document_text = ""
+if "llm_client" not in st.session_state:
+    st.session_state.llm_client = None
 
-# Check if imports were successful
-if not all([ConfigManager, ProcessingOptions, UniversalLLMAdapter, OrchestratorFactory]):
-    logger.critical("Failed to import one or more required components. Exiting.")
-    sys.exit(1)
+# Main title and description
+st.title("🚀 New Issues Analysis")
+st.markdown("""
+This page demonstrates the new Issues Crew architecture with streamlined agents.
+It identifies problems, challenges, risks, and concerns in your documents using a team
+of specialized AI agents that work together more efficiently.
+""")
 
-# Try to import document processor components
-try:
-    DocumentAnalyzer = import_with_logging("lean.document", "DocumentAnalyzer")
-    if not DocumentAnalyzer:
-        DocumentAnalyzer = import_with_logging("document", "DocumentAnalyzer")
-except:
-    logger.error("Could not import DocumentAnalyzer from any location")
-    DocumentAnalyzer = None
+# Sidebar configuration
+st.sidebar.header("Analysis Settings")
 
-try:
-    DocumentChunker = import_with_logging("lean.chunker", "DocumentChunker")
-    if not DocumentChunker:
-        DocumentChunker = import_with_logging("chunker", "DocumentChunker")
-except:
-    logger.error("Could not import DocumentChunker from any location")
-    DocumentChunker = None
+# Model selection
+model_options = ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo"]
+selected_model = st.sidebar.selectbox("Language Model", model_options, index=0)
 
-# Determine test document to use
-SAMPLE_TEXT = """
-This is a test document for Better Notes.
+# Detail level
+detail_level = st.sidebar.select_slider(
+    "Detail Level",
+    options=["Essential", "Standard", "Comprehensive"],
+    value="Standard",
+    help="Controls the depth of analysis"
+)
 
-# Issues Analysis
+# Temperature
+temperature = st.sidebar.slider(
+    "Temperature", 
+    min_value=0.0, 
+    max_value=1.0, 
+    value=0.2,
+    step=0.1,
+    help="Lower = more consistent, higher = more creative"
+)
 
-The current implementation has several issues:
+# Advanced settings
+with st.sidebar.expander("Advanced Settings"):
+    # Number of chunks
+    num_chunks = st.slider(
+        "Number of Document Chunks",
+        min_value=3,
+        max_value=20,
+        value=8,
+        help="Number of sections to divide document into"
+    )
+    
+    max_rpm = st.slider(
+        "Max Requests Per Minute",
+        min_value=5,
+        max_value=30,
+        value=10,
+        step=1,
+        help="Controls API request rate"
+    )
+    
+    show_agent_details = st.checkbox(
+        "Show Agent Interactions", 
+        value=False,
+        help="Display detailed agent activity logs"
+    )
+    
+    enable_reviewer = st.checkbox(
+        "Enable Review Step", 
+        value=True,
+        help="Final quality check of the analysis before delivery"
+    )
+    
+    debug_mode = st.checkbox(
+        "Debug Mode",
+        value=False,
+        help="Show raw outputs and intermediate results for troubleshooting"
+    )
 
-## Critical Issues
-1. The DocumentAnalyzer may not be loading correctly
-2. The ConfigManager error with field() method needs to be addressed
+# Document upload
+st.header("Upload Document")
+upload_tab, paste_tab = st.tabs(["Upload File", "Paste Text"])
 
-## High-Priority Issues
-1. The Orchestrator has complex import paths that can fail
-2. Error handling is silencing important issues
-3. The result_formatting.py needs better type handling
+document_text = st.session_state.document_text
 
-## Medium-Priority Issues
-1. Too many fallback paths make debugging difficult
-2. Streamlit UI needs to handle different result formats better
+with upload_tab:
+    uploaded_file = st.file_uploader("Upload a text document", type=["txt", "md"])
+    if uploaded_file:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tmp_file:
+            tmp_file.write(uploaded_file.getvalue())
+            tmp_path = tmp_file.name
+        
+        try:
+            with open(tmp_path, "r", encoding="utf-8", errors="replace") as f:
+                document_text = f.read()
+            
+            st.success(f"File loaded: {uploaded_file.name}")
+            st.session_state.document_text = document_text
+            
+            with st.expander("Document Preview"):
+                st.text_area(
+                    "Content",
+                    document_text[:2000] + ("..." if len(document_text) > 2000 else ""),
+                    height=200,
+                    disabled=True
+                )
+        except Exception as e:
+            st.error(f"Error reading file: {str(e)}")
+            logger.error(f"File upload error: {str(e)}")
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except:
+                pass
 
-Let's fix these issues to make Better Notes more reliable.
-"""
+with paste_tab:
+    pasted_text = st.text_area(
+        "Paste document text here",
+        height=200,
+        placeholder="Paste your document text here..."
+    )
+    if pasted_text:
+        document_text = pasted_text
+        st.session_state.document_text = document_text
+        st.success(f"Text loaded: {len(document_text)} characters")
 
-def test_config_manager():
-    """Test ConfigManager functionality."""
-    logger.info("Testing ConfigManager")
+# Show document length and chunk size
+if document_text:
+    estimated_chunk_size = len(document_text) // num_chunks
+    st.info(f"Document length: {len(document_text)} characters. With {num_chunks} chunks, each chunk will be approximately {estimated_chunk_size} characters.")
+
+# Custom instructions
+with st.expander("Custom Instructions (Optional)", expanded=False):
+    user_instructions = st.text_area(
+        "Add specific instructions for the analysis:",
+        placeholder="E.g., 'Focus on technical issues', 'Prioritize security risks', 'Look for budget concerns'",
+        help="Your instructions will guide how the agents analyze the document."
+    )
+    
+    # Focus areas
+    focus_areas = st.multiselect(
+        "Focus Areas",
+        options=["Technical", "Process", "Resource", "Quality", "Risk"],
+        default=[],
+        help="Select specific types of issues to emphasize in the analysis"
+    )
+
+# Process button
+process_button = st.button(
+    "Identify Issues", 
+    disabled=not document_text,
+    type="primary",
+    use_container_width=True
+)
+
+# Function to save output to file
+def save_output_to_file(content: Any) -> str:
+    """
+    Save analysis output to the outputs folder with a timestamp.
+    Handles different content types.
+    
+    Args:
+        content: Content to save (string, dict, or other)
+        
+    Returns:
+        Path to saved file
+    """
+    # Determine if content is HTML or JSON
+    if isinstance(content, str) and ("<html" in content.lower() or "<div" in content.lower()):
+        # HTML content
+        content_str = content
+        file_ext = "html"
+    elif isinstance(content, dict):
+        # JSON content
+        try:
+            content_str = json.dumps(content, indent=2)
+            file_ext = "json"
+        except:
+            content_str = str(content)
+            file_ext = "txt"
+    else:
+        # Other content
+        content_str = str(content)
+        file_ext = "txt"
+    
+    # Generate filename with timestamp
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    filename = f"new_issues_{timestamp}.{file_ext}"
+    filepath = OUTPUT_DIR / "new_issues_test" / filename
+    
+    # Save to file
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(content_str)
+    
+    return str(filepath)
+
+# Function to process document
+def process_document():
+    """Process the document with the new implementation."""
+    # Check API key
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        st.error("OpenAI API key not found! Please set the OPENAI_API_KEY environment variable.")
+        return
+    
+    logger.info(f"Starting issues analysis with model: {selected_model}")
+    
+    # Create progress placeholders
+    progress_container = st.container()
+    progress_placeholder = progress_container.empty()
+    status_text_placeholder = progress_container.empty()
+    
+    # Create stage indicators using columns and placeholders
+    stages = ["Planning", "Extraction", "Aggregation", "Evaluation", "Formatting"]
+    if enable_reviewer:
+        stages.append("Review")
+    
+    stage_cols = st.columns(len(stages))
+    stage_indicators = []
+    
+    for i, stage in enumerate(stages):
+        with stage_cols[i]:
+            # Use placeholders for each stage indicator
+            stage_indicators.append({
+                "name": stage,
+                "placeholder": st.empty(),
+                "status": "waiting"
+            })
+            
+            # Set initial waiting state
+            stage_indicators[i]["placeholder"].markdown(f"""
+                <div style="text-align: center;">
+                    <div style="font-size: 1.5rem;">⏳</div>
+                    <div style="font-weight: 500;">{stage}</div>
+                    <div style="font-size: 0.8rem;">Waiting</div>
+                </div>
+            """, unsafe_allow_html=True)
+    
+    # Log container (if enabled)
+    log_placeholder = None
+    if show_agent_details:
+        log_placeholder = st.empty()
+        st.session_state.agent_logs = []
+    
+    # Track overall progress
+    progress_value = 0.0
+    start_time = time.time()
+    
+    # Progress callback that updates placeholders
+    def update_progress(progress, message):
+        """Update progress indicators in place."""
+        nonlocal progress_value
+        progress_value = progress
+        
+        # Update progress bar
+        progress_placeholder.progress(progress)
+        
+        # Filter out chunk-level messages for cleaner UI
+        is_chunk_message = any(term in message.lower() for term in 
+                              ['chunk', 'processing chunk', 'extracting from chunk'])
+        
+        # Only update status text for high-level messages
+        if not is_chunk_message:
+            status_text_placeholder.text(message)
+        
+        # Determine current stage based on progress value
+        current_stage = None
+        if progress <= 0.2:
+            current_stage = "Planning"
+        elif progress <= 0.5:
+            current_stage = "Extraction"
+        elif progress <= 0.65:
+            current_stage = "Aggregation"
+        elif progress <= 0.75:
+            current_stage = "Evaluation"
+        elif progress <= 0.85:
+            current_stage = "Formatting"
+        elif progress <= 1.0 and enable_reviewer:
+            current_stage = "Review"
+        
+        # Update stage indicators
+        for i, indicator in enumerate(stage_indicators):
+            stage = indicator["name"]
+            status = indicator["status"]
+            new_status = "waiting"
+            
+            # Determine new status
+            if stage == current_stage:
+                new_status = "working"
+            elif stages.index(stage) < stages.index(current_stage) if current_stage else False:
+                new_status = "complete"
+                
+            # Only update if status changed
+            if new_status != status:
+                stage_indicators[i]["status"] = new_status
+                
+                # Determine icon and color
+                if new_status == "complete":
+                    icon = "✅"
+                    color = "#20c997"
+                elif new_status == "working":
+                    icon = "🔄"
+                    color = "#ff9f43"
+                else:
+                    icon = "⏳"
+                    color = "#6c757d"
+                
+                # Update the placeholder with new status
+                indicator["placeholder"].markdown(f"""
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.5rem;">{icon}</div>
+                        <div style="font-weight: 500; color: {color};">{stage}</div>
+                        <div style="font-size: 0.8rem;">{new_status.capitalize()}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+        
+        # Add to logs if detailed logging is enabled
+        if show_agent_details and log_placeholder:
+            if not is_chunk_message or log_placeholder is None:
+                # Add the log entry
+                timestamp = time.strftime("%H:%M:%S")
+                log_entry = f"[{timestamp}] {message}"
+                st.session_state.agent_logs.append(log_entry)
+                
+                # Format logs
+                log_html = []
+                for entry in st.session_state.agent_logs[-20:]:  # Show last 20 logs
+                    entry_class = "log-entry"
+                    if "error" in entry.lower() or "failed" in entry.lower():
+                        entry_class += " status-error"
+                    elif "complete" in entry.lower() or "success" in entry.lower():
+                        entry_class += " status-complete"
+                        
+                    log_html.append(f'<div class="{entry_class}">{entry}</div>')
+                
+                # Update the log placeholder
+                log_placeholder.markdown("\n".join(log_html), unsafe_allow_html=True)
     
     try:
-        # Create ConfigManager
+        # Map UI detail level to config values
+        detail_map = {
+            "Essential": "essential",
+            "Standard": "standard",
+            "Comprehensive": "comprehensive"
+        }
+        
+        # Create configuration manager
         config_manager = ConfigManager()
-        logger.info(f"ConfigManager initialized with base_dir: {config_manager.base_dir}")
         
-        # List config directory contents
-        config_dir = os.path.join(config_manager.base_dir, "config")
-        if os.path.exists(config_dir):
-            logger.info(f"Config directory contents: {os.listdir(config_dir)}")
-        else:
-            logger.warning(f"Config directory not found: {config_dir}")
+        # Create options dictionary
+        options = {
+            "crew_type": "issues",
+            "detail_level": detail_map.get(detail_level, "standard"),
+            "focus_areas": [area.lower() for area in focus_areas],
+            "user_instructions": user_instructions,
+            "min_chunks": num_chunks,
+            "max_chunk_size": len(document_text) // num_chunks if num_chunks > 0 else 10000,
+            "enable_reviewer": enable_reviewer
+        }
         
-        # Try loading issues config
-        issues_config = config_manager.get_config("issues")
-        if issues_config:
-            logger.info(f"Successfully loaded issues config: {list(issues_config.keys())}")
-        else:
-            logger.warning("Failed to load issues config")
+        logger.info(f"Starting document processing with options: {json.dumps(options, default=str)}")
         
-        # Try processing options
-        options = config_manager.get_processing_options()
-        logger.info(f"Default processing options: {options}")
-        
-        return True
-    except Exception as e:
-        logger.error(f"Error testing ConfigManager: {e}")
-        logger.error(traceback.format_exc())
-        return False
 
-def test_document_analyzer(text=SAMPLE_TEXT):
-    """Test DocumentAnalyzer functionality."""
-    logger.info("Testing DocumentAnalyzer")
-    
-    if DocumentAnalyzer is None:
-        logger.error("DocumentAnalyzer could not be imported")
-        return False
-    
-    try:
-        # Create LLM client
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            logger.error("OPENAI_API_KEY not found in environment variables")
-            return False
-        
-        llm_client = UniversalLLMAdapter(api_key=api_key)
-        
-        # Create analyzer
-        analyzer = DocumentAnalyzer(llm_client)
-        logger.info("DocumentAnalyzer created successfully")
-        
-        # Analyze preview
-        import asyncio
-        result = asyncio.run(analyzer.analyze_preview(text))
-        logger.info(f"Analysis result: {result}")
-        
-        return True
-    except Exception as e:
-        logger.error(f"Error testing DocumentAnalyzer: {e}")
-        logger.error(traceback.format_exc())
-        return False
-
-def test_document_chunker(text=SAMPLE_TEXT):
-    """Test DocumentChunker functionality."""
-    logger.info("Testing DocumentChunker")
-    
-    if DocumentChunker is None:
-        logger.error("DocumentChunker could not be imported")
-        return False
-    
-    try:
-        # Create chunker
-        chunker = DocumentChunker()
-        logger.info("DocumentChunker created successfully")
-        
-        # Chunk document
-        chunks = chunker.chunk_document(text, min_chunks=3)
-        logger.info(f"Generated {len(chunks)} chunks")
-        for i, chunk in enumerate(chunks):
-            logger.info(f"Chunk {i}: {len(chunk['text'])} chars, position: {chunk.get('position')}")
-        
-        return True
-    except Exception as e:
-        logger.error(f"Error testing DocumentChunker: {e}")
-        logger.error(traceback.format_exc())
-        return False
-
-def test_orchestrator(text=SAMPLE_TEXT):
-    """Test Orchestrator functionality."""
-    logger.info("Testing Orchestrator")
-    
-    try:
-        # Get API key
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            logger.error("OPENAI_API_KEY not found in environment variables")
-            return False
-        
-        # Create config manager
-        config_manager = ConfigManager()
-        
-        # Create orchestrator
+        # Create the orchestrator directly using the factory function
         orchestrator = OrchestratorFactory.create_orchestrator(
             api_key=api_key,
-            model="gpt-3.5-turbo",
-            temperature=0.2,
-            verbose=True,
+            model=selected_model,
+            temperature=temperature,
+            max_chunk_size=len(document_text) // num_chunks if num_chunks > 0 else 10000,
+            max_rpm=max_rpm,
+            verbose=show_agent_details,
             config_manager=config_manager
         )
         
-        logger.info("Orchestrator created successfully")
+        # Store LLM client for chat interface
+        st.session_state.llm_client = orchestrator.llm_client
         
-        # Define progress callback
-        def progress_callback(progress, message):
-            logger.info(f"Progress: {progress:.2f} - {message}")
-        
-        # Process document
-        options = {
-            "model_name": "gpt-3.5-turbo",
-            "temperature": 0.2,
-            "crews": ["issues"],
-            "min_chunks": 3,
-            "max_chunk_size": 2000,
-            "enable_reviewer": True,
-            "detail_level": "standard"
-        }
-        
-        logger.info("Starting document processing")
-        result = orchestrator.process_document(
-            text,
-            options=options,
-            progress_callback=progress_callback
-        )
-        
-        # Log result summary
-        if isinstance(result, dict):
-            if "error" in result:
-                logger.error(f"Processing error: {result['error']}")
-                return False
-            
-            logger.info(f"Processing successful, result keys: {list(result.keys())}")
-            
-            # Check for issues result
-            if "issues" in result:
-                issues_result = result["issues"]
-                if isinstance(issues_result, dict):
-                    logger.info(f"Issues result keys: {list(issues_result.keys())}")
-                else:
-                    logger.info(f"Issues result type: {type(issues_result)}")
-        else:
-            logger.warning(f"Unexpected result type: {type(result)}")
-        
-        return True
-    except Exception as e:
-        logger.error(f"Error testing Orchestrator: {e}")
-        logger.error(traceback.format_exc())
-        return False
-
-def test_component_tree():
-    """Analyze and log the component tree to identify import issues."""
-    logger.info("Analyzing component tree")
-    
-    # List of components to check
-    components = [
-        {"module": "universal_llm_adapter", "class": "UniversalLLMAdapter"},
-        {"module": "config_manager", "class": "ConfigManager"},
-        {"module": "orchestrator", "class": "Orchestrator"},
-        {"module": "orchestrator_factory", "class": "OrchestratorFactory"},
-        {"module": "lean.document", "class": "DocumentAnalyzer", "alternate_module": "document"},
-        {"module": "lean.chunker", "class": "DocumentChunker", "alternate_module": "chunker"},
-        {"module": "agents.planner", "class": "PlannerAgent", "alternate_module": "planner"},
-        {"module": "crews.issues_crew", "class": "IssuesCrew", "alternate_module": "issues_crew"},
-    ]
-    
-    # Check each component
-    for comp in components:
-        module_name = comp["module"]
-        class_name = comp["class"]
+        # Process document with progress tracking using the synchronous method
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         
         try:
-            module = __import__(module_name, fromlist=[class_name])
-            class_obj = getattr(module, class_name)
-            logger.info(f"✅ Found {module_name}.{class_name}")
-            
-            # If this is a class, inspect its methods
-            if hasattr(class_obj, "__dict__"):
-                methods = [m for m in dir(class_obj) if not m.startswith("_") and callable(getattr(class_obj, m))]
-                logger.info(f"   Methods: {', '.join(methods[:5])}{'...' if len(methods) > 5 else ''}")
-        except ImportError:
-            # Try alternate module if available
-            if "alternate_module" in comp:
-                try:
-                    alt_module = comp["alternate_module"]
-                    module = __import__(alt_module, fromlist=[class_name])
-                    class_obj = getattr(module, class_name)
-                    logger.info(f"✅ Found {alt_module}.{class_name} (alternate)")
-                except Exception as e:
-                    logger.warning(f"❌ Not found: {module_name}.{class_name} or {alt_module}.{class_name}")
+            # Run the async method in the event loop
+            result = loop.run_until_complete(
+                orchestrator.process_document(
+                    document_text,
+                    options=options,
+                    progress_callback=update_progress
+                )
+            )
+        finally:
+            # Always close the loop
+            loop.close()
+        
+        # Show raw result in debug mode
+        if debug_mode:
+            with st.expander("Debug: Raw Result Structure", expanded=False):
+                st.json(result)
+        
+        # Store document info for chat
+        if "_metadata" in result and "document_info" in result["_metadata"]:
+            st.session_state.document_info = result["_metadata"]["document_info"]
+        
+        # Store results in session state
+        st.session_state.agent_result = result
+        st.session_state.processing_complete = True
+        st.session_state.processing_time = time.time() - start_time
+        
+        # Clear progress display
+        progress_placeholder.empty()
+        status_text_placeholder.empty()
+        for indicator in stage_indicators:
+            indicator["placeholder"].empty()
+        if log_placeholder:
+            log_placeholder.empty()
+        
+        # Display results
+        display_results(st.session_state.agent_result, st.session_state.processing_time)
+        
+    except Exception as e:
+        # Clear progress display
+        progress_placeholder.empty()
+        status_text_placeholder.empty()
+        for indicator in stage_indicators:
+            indicator["placeholder"].empty()
+        if log_placeholder:
+            log_placeholder.empty()
+        
+        # Log the error
+        logger.error(f"Error processing document: {str(e)}")
+        logger.error(traceback.format_exc())
+        
+        # Display error
+        st.error(f"Error processing document: {str(e)}")
+        
+        with st.expander("Technical Error Details"):
+            st.code(traceback.format_exc())
+        
+        # Update session state
+        st.session_state.processing_complete = False
+        st.session_state.agent_result = {"error": str(e)}
+
+# Function to display results
+def display_results(result, processing_time):
+    """Display the processing results with improved result handling."""
+    # Handle error results
+    if isinstance(result, dict) and "error" in result:
+        st.error(f"Error during processing: {result['error']}")
+        return
+    if isinstance(formatted_report, str) and ("<html" in formatted_report.lower() or "<div" in formatted_report.lower()):
+        # Display as HTML
+        st.markdown(formatted_report, unsafe_allow_html=True)
+    else:
+        # Display as text or other format
+        st.markdown(formatted_report)
+    # Extract the formatted report
+    formatted_report = None
+    if isinstance(result, dict) and "formatted_report" in result:
+        formatted_report = result["formatted_report"]
+    elif isinstance(result, str):
+        formatted_report = result
+    
+    # Save the result to a file
+    if formatted_report:
+        saved_filepath = save_output_to_file(formatted_report)
+    else:
+        saved_filepath = save_output_to_file(result)
+    
+    # Show success message
+    st.success(f"Analysis completed in {processing_time:.2f} seconds")
+    
+    # Extract review information
+    review_result = None
+    if isinstance(result, dict) and "review_result" in result:
+        review_result = result["review_result"]
+    
+    # Create tabs for different views
+    result_tabs = st.tabs(["Report", "Chat with Document", "Technical Info"])
+    
+    with result_tabs[0]:
+        st.subheader("Issues Identification Results")
+        
+        # Add review feedback if available
+        if review_result and isinstance(review_result, dict):
+            # Show assessment scores if available
+            assessment = review_result.get("assessment", {})
+            if assessment and isinstance(assessment, dict):
+                st.info("Analysis Quality Assessment")
+                
+                # Count metrics to arrange in columns
+                metrics = [(k.replace("_score", "").replace("_", " ").title(), v) 
+                          for k, v in assessment.items() 
+                          if isinstance(v, (int, float))]
+                
+                if metrics:
+                    metric_cols = st.columns(len(metrics))
+                    for i, (key, value) in enumerate(metrics):
+                        metric_cols[i].metric(key, f"{value}/5")
+                
+                # Show summary assessment
+                if "summary" in review_result:
+                    with st.expander("Review Feedback", expanded=False):
+                        st.markdown(f"**{review_result['summary']}**")
+                        
+                        # Show improvement suggestions if available
+                        suggestions = review_result.get("improvement_suggestions", [])
+                        if suggestions and isinstance(suggestions, list):
+                            st.markdown("### Improvement Suggestions")
+                            for suggestion in suggestions:
+                                if isinstance(suggestion, dict):
+                                    st.markdown(f"- **{suggestion.get('area', 'General')}**: {suggestion.get('suggestion', '')}")
+        
+        # Display formatted result
+        if formatted_report:
+            # Check if it's HTML
+            if isinstance(formatted_report, str) and ("<html" in formatted_report.lower() or "<div" in formatted_report.lower()):
+                # Display as HTML
+                st.markdown(formatted_report, unsafe_allow_html=True)
             else:
-                logger.warning(f"❌ Not found: {module_name}.{class_name}")
-        except Exception as e:
-            logger.warning(f"❌ Error checking {module_name}.{class_name}: {e}")
-    
-    # Print Python path
-    logger.info(f"Python path: {sys.path}")
-    
-    # List files in current directory
-    logger.info(f"Current directory: {os.getcwd()}")
-    logger.info(f"Files in current directory: {os.listdir('.')}")
-    
-    # Check for common directories
-    for directory in ["lean", "agents", "crews", "config"]:
-        if os.path.exists(directory):
-            logger.info(f"Directory {directory} exists, contents: {os.listdir(directory)}")
+                # Display as text or other format
+                st.markdown(formatted_report)
         else:
-            logger.warning(f"Directory {directory} does not exist")
+            # Use the result formatting utility
+            enhanced_html = enhance_result_display(result, "issues", detail_level.lower())
+            st.markdown(enhanced_html, unsafe_allow_html=True)
+        
+        # Download option
+        st.divider()
+        create_download_button(result, os.path.basename(saved_filepath))
+    
+    with result_tabs[1]:
+        st.subheader("Chat about this Issues Report")
+        
+        # Use the chat interface
+        display_chat_interface(
+            llm_client=st.session_state.llm_client,
+            document_text=document_text,
+            summary_text=formatted_report or json.dumps(result, indent=2),
+            document_info=st.session_state.document_info
+        )
+    
+    with result_tabs[2]:
+        st.subheader("Technical Information")
+        
+        # Document stats if available
+        document_info = st.session_state.document_info
+        if document_info and isinstance(document_info, dict) and "basic_stats" in document_info:
+            stats = document_info["basic_stats"]
+            st.markdown("### Document Statistics")
+            
+            # Create columns for stats
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Word Count", stats.get("word_count", 0))
+                st.metric("Paragraphs", stats.get("paragraph_count", 0))
+            with col2:
+                st.metric("Sentences", stats.get("sentence_count", 0))
+                st.metric("Characters", stats.get("char_count", 0))
+            with col3:
+                st.metric("Est. Tokens", stats.get("estimated_tokens", 0))
+                st.metric("Chunks Processed", num_chunks)
+        
+        # Technical configuration details
+        st.markdown("### Analysis Configuration")
+        tech_details = {
+            "model_used": selected_model,
+            "temperature": temperature,
+            "detail_level": detail_level,
+            "document_length": len(document_text),
+            "number_of_chunks": num_chunks,
+            "calculated_chunk_size": len(document_text) // num_chunks,
+            "max_rpm": max_rpm,
+            "processing_time_seconds": round(processing_time, 2),
+            "output_file": saved_filepath,
+            "reviewer_enabled": enable_reviewer,
+            "user_preferences": {
+                "user_instructions": user_instructions if user_instructions else "None provided",
+                "focus_areas": focus_areas
+            }
+        }
+        
+        # Display in a collapsible section
+        with st.expander("Configuration Details", expanded=False):
+            st.json(tech_details)
+        
+        # Show plan if available
+        if isinstance(result, dict) and "_metadata" in result and "plan" in result["_metadata"]:
+            st.markdown("### Agent Plan")
+            with st.expander("Planner-Generated Instructions", expanded=False):
+                st.json(result["_metadata"]["plan"])
+        
+        # Additional metadata
+        if isinstance(result, dict) and "_metadata" in result:
+            metadata = result["_metadata"]
+            # Remove plan and document_info to avoid duplication
+            metadata_copy = metadata.copy()
+            if "plan" in metadata_copy:
+                del metadata_copy["plan"]
+            if "document_info" in metadata_copy:
+                del metadata_copy["document_info"]
+                
+            if metadata_copy:
+                st.markdown("### Processing Metadata")
+                with st.expander("Processing Stats", expanded=False):
+                    st.json(metadata_copy)
 
-def main():
-    """Run all tests and collect results."""
-    logger.info("=" * 50)
-    logger.info("BETTER NOTES COMPONENT TEST")
-    logger.info("=" * 50)
-    logger.info(f"Python version: {sys.version}")
-    logger.info(f"Current directory: {os.getcwd()}")
-    logger.info("=" * 50)
+# Run when process button is clicked
+if process_button:
+    # Reset processing flags
+    st.session_state.processing_complete = False
+    st.session_state.agent_result = None
     
-    # Analyze component tree first
-    logger.info("COMPONENT TREE ANALYSIS")
-    test_component_tree()
-    logger.info("=" * 50)
-    
-    # Run individual component tests
-    results = {
-        "ConfigManager": test_config_manager(),
-        "DocumentAnalyzer": test_document_analyzer(),
-        "DocumentChunker": test_document_chunker(),
-        "Orchestrator": test_orchestrator()
-    }
-    
-    # Print summary
-    logger.info("=" * 50)
-    logger.info("TEST RESULTS SUMMARY")
-    for component, success in results.items():
-        status = "✅ PASS" if success else "❌ FAIL"
-        logger.info(f"{status}: {component}")
-    logger.info("=" * 50)
-    
-    # Give recommendations based on results
-    logger.info("RECOMMENDATIONS:")
-    
-    if not results["ConfigManager"]:
-        logger.info("- Fix ConfigManager: Check the fields definition in the ProcessingOptions class")
-    
-    if not results["DocumentAnalyzer"]:
-        logger.info("- Fix DocumentAnalyzer: Check that the module is in your Python path")
-        logger.info("  Possible fix: Make sure 'lean' directory is in your Python path")
-    
-    if not results["DocumentChunker"]:
-        logger.info("- Fix DocumentChunker: Check that the module is in your Python path")
-        logger.info("  Possible fix: Make sure 'lean' directory is in your Python path")
-    
-    if not results["Orchestrator"]:
-        if not (results["DocumentAnalyzer"] and results["DocumentChunker"]):
-            logger.info("- Fix Orchestrator: First fix DocumentAnalyzer and DocumentChunker")
-        else:
-            logger.info("- Fix Orchestrator: Check for initialization errors in the pipeline")
-    
-    # If all tests passed
-    if all(results.values()):
-        logger.info("All components are working correctly!")
-    
-    logger.info("=" * 50)
-    logger.info("See debug_log.txt for detailed debugging information")
-    
-    return results
+    # Process the document
+    process_document()
 
-if __name__ == "__main__":
-    main()
+# If results are already available, display them
+elif st.session_state.processing_complete and st.session_state.agent_result:
+    display_results(st.session_state.agent_result, st.session_state.processing_time)
+
+# Footer with implementation note
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center;">
+    <p>🚀 <strong>New Architecture</strong> - Using the streamlined multi-agent system</p>
+</div>
+""", unsafe_allow_html=True)
