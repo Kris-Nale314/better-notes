@@ -1,14 +1,16 @@
+# orchestrator_factory.py
 """
 OrchestratorFactory - Creates properly configured orchestrator instances.
-Simplifies the creation and configuration of orchestrators.
+Maintains compatibility while using the enhanced Orchestrator.
 """
 
 import logging
 from typing import Dict, Any, Optional
+import openai
 
-from universal_llm_adapter import UniversalLLMAdapter
-from config_manager import ConfigManager, ProcessingOptions
-from orchestrator import Orchestrator
+from universal_llm_adapter import LLMAdapter
+from config_manager import ConfigManager
+from orchestrator import Orchestrator  # Our new Orchestrator class
 
 logger = logging.getLogger(__name__)
 
@@ -42,35 +44,19 @@ class OrchestratorFactory:
         Returns:
             Configured orchestrator instance
         """
-        # Create or get config manager
-        if config_manager is None:
-            config_manager = ConfigManager()
+        logger.info(f"Creating orchestrator with model: {model}")
         
-        # Create or wrap LLM client
-        if llm_client is None:
-            llm_client = UniversalLLMAdapter(
-                api_key=api_key,
-                model=model,
-                temperature=temperature
-            )
-        elif not isinstance(llm_client, UniversalLLMAdapter):
-            llm_client = UniversalLLMAdapter(
-                llm_client=llm_client,
-                api_key=api_key,
-                model=model,
-                temperature=temperature
-            )
-        
-        # Create orchestrator
-        orchestrator = Orchestrator(
+        # Create the orchestrator with our parameters
+        return Orchestrator(
+            api_key=api_key,
             llm_client=llm_client,
+            model=model,
+            temperature=temperature,
             verbose=verbose,
             max_chunk_size=max_chunk_size,
             max_rpm=max_rpm,
             config_manager=config_manager
         )
-        
-        return orchestrator
     
     @staticmethod
     def create_from_options(
@@ -91,14 +77,21 @@ class OrchestratorFactory:
         Returns:
             Configured orchestrator instance
         """
-        # Create orchestrator with basic settings
+        # Extract options with defaults
+        model = options.get("model_name", "gpt-3.5-turbo")
+        temperature = options.get("temperature", 0.2)
+        max_chunk_size = options.get("max_chunk_size", 10000)
+        max_rpm = options.get("max_rpm", 10)
+        verbose = options.get("verbose", True)
+        
+        # Create orchestrator with extracted options
         return OrchestratorFactory.create_orchestrator(
             api_key=api_key,
             llm_client=llm_client,
-            model=options.get("model_name", "gpt-3.5-turbo"),
-            temperature=options.get("temperature", 0.2),
-            max_chunk_size=options.get("max_chunk_size", 10000),
-            max_rpm=options.get("max_rpm", 10),
-            verbose=True,
+            model=model,
+            temperature=temperature,
+            max_chunk_size=max_chunk_size,
+            max_rpm=max_rpm,
+            verbose=verbose,
             config_manager=config_manager
         )

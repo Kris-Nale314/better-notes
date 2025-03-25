@@ -1,0 +1,10 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "description": "Default planner configuration"
+  },
+  "planner": {
+    "role": "Planning Agent",
+    "goal": "Create optimized analysis plans"
+  }
+}

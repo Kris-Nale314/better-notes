@@ -1,272 +1,370 @@
+# orchestrator.py
 """
-Simplified Orchestrator - Coordinates the document processing pipeline.
-Manages the flow of data through the multi-agent system with minimal complexity.
+Enhanced Orchestrator for Better Notes with integrated ProcessingContext.
+Provides streamlined document processing with improved state management.
 """
 
-import asyncio
-import logging
 import time
+import logging
+import json
 from datetime import datetime
-from typing import Dict, Any, Optional, Callable
+from typing import Dict, Any, List, Optional, Callable, Union
+import asyncio
 
-# Import core components
-from universal_llm_adapter import UniversalLLMAdapter
-from config_manager import ConfigManager, ProcessingOptions
-
-# Import processing components
-from lean.document import DocumentAnalyzer
-from lean.chunker import DocumentChunker
-
-# Import agent
-from agents.planner import PlannerAgent
+from universal_llm_adapter import LLMAdapter
+from config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
+class ProcessingContext:
+    """
+    Context object that flows through the agent pipeline.
+    Provides standardized storage for document, chunks, results, and metadata.
+    """
+    
+    def __init__(self, document_text: str, options: Optional[Dict[str, Any]] = None):
+        """
+        Initialize a processing context.
+        
+        Args:
+            document_text: Document text to process
+            options: Processing options
+        """
+        # Store document and options
+        self.document_text = document_text
+        self.options = options or {}
+        
+        # Document metadata
+        self.document_info = {}
+        
+        # Chunking
+        self.chunks = []  # List of document chunks
+        self.chunk_metadata = []  # Metadata for each chunk
+        
+        # Processing results by stage
+        self.results = {}
+        
+        # Agent instructions from planner
+        self.agent_instructions = {}
+        
+        # Processing metadata
+        self.metadata = {
+            "start_time": time.time(),
+            "run_id": f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+            "current_stage": None,
+            "stages": {},
+            "errors": []
+        }
+    
+    def set_stage(self, stage_name: str) -> None:
+        """
+        Begin a processing stage.
+        
+        Args:
+            stage_name: Name of the stage to start
+        """
+        self.metadata["current_stage"] = stage_name
+        self.metadata["stages"][stage_name] = {
+            "status": "started",
+            "start_time": time.time()
+        }
+        logger.info(f"Starting stage: {stage_name}")
+    
+    def complete_stage(self, stage_name: str, result: Any = None) -> None:
+        """
+        Complete a processing stage.
+        
+        Args:
+            stage_name: Name of the completed stage
+            result: Result of the stage (optional)
+        """
+        if stage_name in self.metadata["stages"]:
+            stage = self.metadata["stages"][stage_name]
+            stage["status"] = "completed"
+            stage["end_time"] = time.time()
+            stage["duration"] = stage["end_time"] - stage["start_time"]
+            
+            if result is not None:
+                self.results[stage_name] = result
+            
+            logger.info(f"Completed stage: {stage_name} in {stage['duration']:.2f}s")
+    
+    def fail_stage(self, stage_name: str, error: Union[str, Exception]) -> None:
+        """
+        Mark a stage as failed.
+        
+        Args:
+            stage_name: Name of the failed stage
+            error: Error message or exception
+        """
+        error_message = str(error)
+        
+        if stage_name in self.metadata["stages"]:
+            stage = self.metadata["stages"][stage_name]
+            stage["status"] = "failed"
+            stage["end_time"] = time.time()
+            stage["duration"] = stage["end_time"] - stage["start_time"]
+            stage["error"] = error_message
+            
+            self.metadata["errors"].append({
+                "stage": stage_name,
+                "message": error_message,
+                "time": time.time()
+            })
+            
+            logger.error(f"Failed stage: {stage_name} - {error_message}")
+    
+    def get_processing_time(self) -> float:
+        """
+        Get the total processing time so far.
+        
+        Returns:
+            Processing time in seconds
+        """
+        return time.time() - self.metadata["start_time"]
+    
+    def update_progress(self, progress: float, message: str, callback = None) -> None:
+        """
+        Update progress and call the progress callback if provided.
+        
+        Args:
+            progress: Progress value (0.0 to 1.0)
+            message: Progress message
+            callback: Optional progress callback function
+        """
+        self.metadata["progress"] = progress
+        self.metadata["progress_message"] = message
+        
+        # Call the callback if provided
+        if callback:
+            try:
+                callback(progress, message)
+            except Exception as e:
+                logger.warning(f"Error in progress callback: {e}")
+    
+    # In orchestrator.py, update the get_final_result method in ProcessingContext class
+
+    def get_final_result(self) -> Dict[str, Any]:
+        """
+        Get the final processing result.
+        
+        Returns:
+            Dictionary with processing results and metadata
+        """
+        # Get the formatted result (it might be a string for HTML output)
+        formatted_result = self.results.get("formatting", {})
+        
+        # Create a base result dictionary
+        if isinstance(formatted_result, str):
+            # If formatted_result is a string (likely HTML), wrap it in a dictionary
+            result = {"formatted_report": formatted_result}
+        else:
+            # Otherwise use it directly
+            result = formatted_result
+        
+        # Add review result if available
+        review_result = self.results.get("review")
+        if review_result:
+            result["review_result"] = review_result
+        
+        # Add metadata
+        result["_metadata"] = {
+            "run_id": self.metadata["run_id"],
+            "processing_time": self.get_processing_time(),
+            "document_info": self.document_info,
+            "stages": self.metadata["stages"],
+            "errors": self.metadata["errors"],
+            "options": self.options
+        }
+        
+        # Add plan if available
+        if "planning" in self.results:
+            result["_metadata"]["plan"] = self.results["planning"]
+        
+        return result
+
+
 class Orchestrator:
     """
-    Unified orchestrator for document processing.
-    Coordinates document analysis, chunking, and multi-agent processing.
+    Orchestrates the document processing workflow.
+    Creates and manages the ProcessingContext through the pipeline.
     """
     
     def __init__(
-        self,
-        llm_client,
-        analyzer=None,
-        chunker=None,
-        planner=None,
+        self, 
+        llm_client = None,
+        api_key: Optional[str] = None,
+        model: str = "gpt-3.5-turbo",
+        temperature: float = 0.2,
         verbose: bool = True,
         max_chunk_size: int = 10000,
         max_rpm: int = 10,
         config_manager: Optional[ConfigManager] = None
     ):
         """
-        Initialize the orchestrator with all necessary components.
+        Initialize the orchestrator.
         
         Args:
-            llm_client: Universal LLM adapter
-            analyzer: Document analyzer (created if None)
-            chunker: Document chunker (created if None)
-            planner: Planner agent (created if None)
-            verbose: Whether to enable verbose logging
+            llm_client: LLM client (will be wrapped in LLMAdapter)
+            api_key: API key for LLM (if llm_client not provided)
+            model: Model name
+            temperature: Temperature for generation
+            verbose: Whether to enable verbose mode
             max_chunk_size: Maximum chunk size
             max_rpm: Maximum requests per minute
-            config_manager: Config manager (created if None)
+            config_manager: Optional config manager
         """
-        # Create adapter if needed
-        if not isinstance(llm_client, UniversalLLMAdapter):
-            self.llm_client = UniversalLLMAdapter(llm_client=llm_client)
+        # Ensure we have a proper LLM adapter
+        if llm_client is not None:
+            # Wrap the existing client
+            from universal_llm_adapter import LLMAdapter
+            self.llm_client = LLMAdapter(
+                llm_client=llm_client,
+                model=model,
+                temperature=temperature
+            )
         else:
-            self.llm_client = llm_client
+            # Create a new client
+            from universal_llm_adapter import LLMAdapter
+            self.llm_client = LLMAdapter(
+                api_key=api_key,
+                model=model,
+                temperature=temperature
+            )
         
         self.verbose = verbose
         self.max_chunk_size = max_chunk_size
         self.max_rpm = max_rpm
-        
-        # Create config manager if needed
         self.config_manager = config_manager or ConfigManager()
         
-        # Create components if not provided
-        self.analyzer = analyzer or DocumentAnalyzer(self.llm_client)
-        self.chunker = chunker or DocumentChunker()
-        
-        # Load planner config
-        planner_config = self.config_manager.get_config("planner")
-        
-        # Create planner if needed
-        self.planner = planner or PlannerAgent(
-            llm_client=self.llm_client,
-            config=planner_config,
-            verbose=verbose,
-            max_chunk_size=max_chunk_size,
-            max_rpm=max_rpm
-        )
-        
-        # For tracking current process
-        self.run_id = None
-        self.start_time = None
-        
-        # Cached crews
+        # Cache for crew instances
         self._crews = {}
         
-        logger.info("Orchestrator initialized successfully")
+        logger.info(f"Orchestrator initialized with model: {model}, max_rpm: {max_rpm}")
     
-    def process_document(
+    # orchestrator.py
+    async def process_document(
         self, 
         document_text: str,
         options: Optional[Dict[str, Any]] = None,
-        progress_callback: Optional[Callable] = None
+        progress_callback: Optional[Callable[[float, str], None]] = None
     ) -> Dict[str, Any]:
         """
-        Process a document through the pipeline.
+        Process a document through the appropriate pipeline.
         
         Args:
-            document_text: Document text to process
+            document_text: Document text
             options: Processing options
-            progress_callback: Callback for progress updates
+            progress_callback: Progress callback
             
         Returns:
             Processing results
         """
-        # Initialize run tracking
-        self.start_time = time.time()
-        self.run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
-        # Initial progress update
-        if progress_callback:
-            progress_callback(0.02, "Initializing processing pipeline...")
+        # Create a processing context
+        context = ProcessingContext(document_text, options)
         
         try:
-            # Stage 1: Analyze document to get metadata
-            if progress_callback:
-                progress_callback(0.05, "Analyzing document structure...")
-            
-            document_info = self._analyze_document(document_text)
-            
-            # Stage 2: Generate processing plan using Planner agent
-            if progress_callback:
-                progress_callback(0.1, "Creating analysis plan...")
-            
-            # Get processing options
-            process_options = self._get_processing_options(options)
-            
-            # Extract user preferences
-            user_preferences = {
-                "detail_level": process_options.detail_level,
-                "focus_areas": process_options.focus_areas,
-                "user_instructions": process_options.user_instructions
-            }
-            
-            # Use first crew type
-            crew_type = process_options.crews[0] if process_options.crews else "issues"
-            
-            # Create plan
-            plan = self._create_plan(document_info, user_preferences, crew_type)
-            
-            if progress_callback:
-                progress_callback(0.15, "Analysis plan created")
-            
-            # Stage 3: Process with appropriate crew
-            if crew_type == "issues":
-                if progress_callback:
-                    progress_callback(0.2, "Starting issues analysis...")
-                
-                # Import here to avoid circular imports
-                from crews.issues_crew import IssuesCrew
-                
-                # Create issues crew if not cached
-                if "issues" not in self._crews:
-                    self._crews["issues"] = IssuesCrew(
-                        llm_client=self.llm_client,
-                        verbose=self.verbose,
-                        max_chunk_size=self.max_chunk_size,
-                        max_rpm=self.max_rpm
-                    )
-                
-                # Get the crew
-                issues_crew = self._crews["issues"]
-                
-                # Process with issues crew
-                crew_result = issues_crew.process_document(
-                    document_text, 
-                    document_info=document_info, 
-                    user_preferences={
-                        **user_preferences,
-                        "agent_instructions": plan
-                    },
-                    max_chunk_size=process_options.max_chunk_size,
-                    min_chunks=process_options.min_chunks,
-                    enable_reviewer=process_options.enable_reviewer,
-                    progress_callback=progress_callback
-                )
-                
-                results = {"issues": crew_result}
+            # Determine crew type from options
+            if options and "crews" in options and options["crews"]:
+                crew_type = options["crews"][0]
             else:
-                # Other crew types would be implemented here
-                results = {"error": f"Crew type '{crew_type}' not implemented"}
+                crew_type = "issues"  # Default crew type
             
-            # Final completion
-            if progress_callback:
-                progress_callback(1.0, "Processing complete")
+            logger.info(f"Processing document with crew type: {crew_type}")
             
-            # Add overall metadata
-            processing_time = time.time() - self.start_time
-            results["_metadata"] = {
-                "run_id": self.run_id,
-                "processing_time": processing_time,
-                "document_info": document_info,
-                "plan": plan,
-                "options": process_options.to_dict() if hasattr(process_options, "to_dict") else process_options
-            }
+            # Get or create the appropriate crew
+            crew = self._get_crew(crew_type)
             
-            return results
+            # Process with the crew
+            await crew.process_document_with_context(context, progress_callback)
+            
+            # Return the final result
+            return context.get_final_result()
             
         except Exception as e:
             logger.error(f"Error in document processing: {e}")
-            if progress_callback:
-                progress_callback(1.0, f"Error: {str(e)}")
             
+            # Update context with error
+            current_stage = context.metadata.get("current_stage")
+            if current_stage:
+                context.fail_stage(current_stage, str(e))
+            
+            # Return error result
             return {
                 "error": str(e),
                 "_metadata": {
-                    "run_id": self.run_id,
-                    "error": True,
-                    "processing_time": time.time() - self.start_time
+                    "run_id": context.metadata["run_id"],
+                    "processing_time": context.get_processing_time(),
+                    "errors": context.metadata["errors"],
+                    "error": True
                 }
             }
     
-    def _analyze_document(self, document_text: str) -> Dict[str, Any]:
+    def _get_crew(self, crew_type: str):
         """
-        Analyze document to extract metadata.
+        Get or create a crew by type.
         
         Args:
-            document_text: Document text
-            
-        Returns:
-            Document info dictionary
-        """
-        document_info = asyncio.run(self.analyzer.analyze_preview(document_text))
-        document_info["original_text_length"] = len(document_text)
-        return document_info
-    
-    def _create_plan(
-        self, 
-        document_info: Dict[str, Any], 
-        user_preferences: Dict[str, Any],
-        crew_type: str
-    ) -> Dict[str, Any]:
-        """
-        Create processing plan using the Planner agent.
-        
-        Args:
-            document_info: Document metadata
-            user_preferences: User preferences
             crew_type: Type of crew
             
         Returns:
-            Plan dictionary
+            Crew instance
         """
-        return self.planner.create_plan(
-            document_info=document_info,
-            user_preferences=user_preferences,
-            crew_type=crew_type
-        )
+        if crew_type not in self._crews:
+            # Create the crew based on type
+            if crew_type == "issues":
+                # Import here to avoid circular imports
+                try:
+                    from crews.issues_crew import IssuesCrew
+                    logger.info(f"Creating IssuesCrew instance")
+                    
+                    self._crews[crew_type] = IssuesCrew(
+                        llm_client=self.llm_client,
+                        verbose=self.verbose,
+                        max_chunk_size=self.max_chunk_size,
+                        max_rpm=self.max_rpm,
+                        config_manager=self.config_manager
+                    )
+                except ImportError as e:
+                    logger.error(f"Error importing IssuesCrew: {e}")
+                    raise ValueError(f"Failed to import crew type: {crew_type}")
+            else:
+                raise ValueError(f"Unsupported crew type: {crew_type}")
+        
+        return self._crews[crew_type]
     
-    def _get_processing_options(self, options) -> ProcessingOptions:
+    def process_document_sync(
+        self, 
+        document_text: str,
+        options: Optional[Dict[str, Any]] = None,
+        progress_callback: Optional[Callable[[float, str], None]] = None
+    ) -> Dict[str, Any]:
         """
-        Get processing options from provided options or defaults.
+        Process a document synchronously.
+        This is a wrapper around the async method.
         
         Args:
-            options: Options dictionary or ProcessingOptions object
+            document_text: Document text
+            options: Processing options
+            progress_callback: Progress callback
             
         Returns:
-            ProcessingOptions object
+            Processing results
         """
-        if options is None:
-            # Use defaults
-            return self.config_manager.get_processing_options()
-        elif isinstance(options, dict):
-            # Convert dictionary to ProcessingOptions
-            return self.config_manager.create_options_from_dict(options)
-        else:
-            # Assume it's already a ProcessingOptions object
-            return options
+        # Create a new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            # Run the async method in the event loop
+            return loop.run_until_complete(
+                self.process_document(document_text, options, progress_callback)
+            )
+        finally:
+            # Always close the loop
+            loop.close()
+
+# Factory function for backward compatibility
+def create_orchestrator(**kwargs):
+    """Create an orchestrator with the provided parameters."""
+    return Orchestrator(**kwargs)

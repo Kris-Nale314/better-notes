@@ -1,17 +1,22 @@
+# agents/aggregator.py
 """
 Aggregator Agent - Specialized in combining and deduplicating extraction results.
-Supports the metadata-layered approach through configuration.
+Works with ProcessingContext and integrated crew architecture.
 """
 
-from typing import Dict, Any, List, Optional
 import json
+import logging
+from typing import Dict, Any, List, Optional
 from datetime import datetime
+
 from .base import BaseAgent
+
+logger = logging.getLogger(__name__)
 
 class AggregatorAgent(BaseAgent):
     """
     Agent specialized in combining and deduplicating extraction results from multiple chunks.
-    Enhances metadata during the aggregation process.
+    Enhances metadata during the aggregation process and works with ProcessingContext.
     """
     
     def __init__(
@@ -19,35 +24,46 @@ class AggregatorAgent(BaseAgent):
         llm_client,
         crew_type: str,
         config: Optional[Dict[str, Any]] = None,
+        config_manager = None,
         verbose: bool = True,
-        max_chunk_size: int = 1500, 
-        max_rpm: int = 10,  
-        **kwargs # Accept any additional kwargs
+        max_chunk_size: int = 1500,
+        max_rpm: int = 10
     ):
-        """
-        Initialize an aggregator agent.
-        
-        Args:
-            llm_client: LLM client for agent communication
-            crew_type: Type of crew (issues, actions, opportunities)
-            config: Optional pre-loaded configuration
-            verbose: Whether to enable verbose mode
-            max_chunk_size: Maximum size of text chunks to process
-            max_rpm: Maximum requests per minute for API rate limiting
-            custom_instructions: Custom instructions from Instructor agent
-        """
+        """Initialize an aggregator agent."""
         super().__init__(
             llm_client=llm_client,
             agent_type="aggregation",
             crew_type=crew_type,
             config=config,
+            config_manager=config_manager,
             verbose=verbose,
-            max_chunk_size=max_chunk_size, 
-            max_rpm=max_rpm, 
-            **kwargs # Pass any additional kwargs to the base class
+            max_chunk_size=max_chunk_size,
+            max_rpm=max_rpm
+        )
+    
+    async def process(self, context):
+        """
+        Process extraction results using the context.
+        
+        Args:
+            context: ProcessingContext object
+            
+        Returns:
+            Aggregated results
+        """
+        # Get extraction results from context
+        extraction_results = context.results.get("extraction", [])
+        
+        # Aggregate the results
+        aggregated_result = self.aggregate_results(
+            extraction_results=extraction_results, 
+            document_info=context.document_info
         )
         
-    def aggregate_results(
+        return aggregated_result
+    
+    # In agents/aggregator.py:
+    async def aggregate_results(
         self, 
         extraction_results: List[Dict[str, Any]], 
         document_info: Optional[Dict[str, Any]] = None
@@ -85,13 +101,42 @@ class AggregatorAgent(BaseAgent):
         
         context["total_items"] = item_count
         
-        # Execute the aggregation task
-        result = self.execute_task(context=context)
+        # Execute the aggregation task - ADD AWAIT HERE
+        result = await self.execute_task(context=context)
         
         # Enhance the result with aggregation metadata
         result = self._enhance_result_with_metadata(result, extraction_results)
         
         return result
+    
+    def _get_stage_specific_content(self, context) -> str:
+        """Get stage-specific content for the prompt."""
+        # If context is a dictionary with extraction_results
+        if isinstance(context, dict) and "extraction_results" in context:
+            extraction_results = context["extraction_results"]
+            result_count = context.get("result_count", len(extraction_results))
+            success_rate = context.get("success_rate", "")
+            total_items = context.get("total_items", 0)
+            
+            # Format extraction results
+            extraction_summary = json.dumps(extraction_results, indent=2, default=str)
+            
+            # Add truncation if too long
+            if len(extraction_summary) > 3000:
+                extraction_summary = extraction_summary[:3000] + "...\n[Output truncated]"
+            
+            return f"""
+            EXTRACTION RESULTS:
+            {extraction_summary}
+            
+            EXTRACTION STATISTICS:
+            - Total chunks processed: {result_count}
+            - Success rate: {success_rate}
+            - Total items extracted: {total_items}
+            """
+        
+        # Otherwise, return empty string
+        return ""
     
     def _preprocess_extraction_results(self, extraction_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -229,7 +274,11 @@ class AggregatorAgent(BaseAgent):
                 
                 # Ensure keywords are present
                 if "keywords" not in item and "description" in item:
-                    item["keywords"] = self.extract_keywords(item["description"])
+                    try:
+                        item["keywords"] = self.extract_keywords(item["description"])
+                    except Exception as e:
+                        logger.warning(f"Error extracting keywords: {e}")
+                        item["keywords"] = []
         
         # Add overall metadata
         result["_metadata"] = {

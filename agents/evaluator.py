@@ -1,17 +1,22 @@
+# agents/evaluator.py
 """
 Evaluator Agent - Specialized in assessing importance and impact of identified items.
-Supports the metadata-layered approach through configuration.
+Works with ProcessingContext and integrated crew architecture.
 """
 
-from typing import Dict, Any, List, Optional
 import json
+import logging
+from typing import Dict, Any, List, Optional
 from datetime import datetime
+
 from .base import BaseAgent
+
+logger = logging.getLogger(__name__)
 
 class EvaluatorAgent(BaseAgent):
     """
     Agent specialized in evaluating the importance, severity, or impact of identified items.
-    Enhances metadata with assessment information.
+    Enhances metadata with assessment information and works with ProcessingContext.
     """
     
     def __init__(
@@ -19,35 +24,46 @@ class EvaluatorAgent(BaseAgent):
         llm_client,
         crew_type: str,
         config: Optional[Dict[str, Any]] = None,
+        config_manager = None,
         verbose: bool = True,
-        max_chunk_size: int = 1500, 
-        max_rpm: int = 10,  
-        **kwargs # Accept any additional kwargs
+        max_chunk_size: int = 1500,
+        max_rpm: int = 10
     ):
-        """
-        Initialize an evaluator agent.
-        
-        Args:
-            llm_client: LLM client for agent communication
-            crew_type: Type of crew (issues, actions, opportunities)
-            config: Optional pre-loaded configuration
-            verbose: Whether to enable verbose mode
-            max_chunk_size: Maximum size of text chunks to process
-            max_rpm: Maximum requests per minute for API rate limiting
-            custom_instructions: Custom instructions from Instructor agent
-        """
+        """Initialize an evaluator agent."""
         super().__init__(
             llm_client=llm_client,
             agent_type="evaluation",
             crew_type=crew_type,
             config=config,
+            config_manager=config_manager,
             verbose=verbose,
-            max_chunk_size=max_chunk_size, 
-            max_rpm=max_rpm, 
-            **kwargs # Pass any additional kwargs to the base class
+            max_chunk_size=max_chunk_size,
+            max_rpm=max_rpm
         )
     
-    def evaluate_items(
+    async def process(self, context):
+        """
+        Process aggregated results using the context.
+        
+        Args:
+            context: ProcessingContext object
+            
+        Returns:
+            Evaluated results
+        """
+        # Get aggregation results from context
+        aggregated_result = context.results.get("aggregation", {})
+        
+        # Evaluate the results
+        evaluated_result = self.evaluate_items(
+            aggregated_items=aggregated_result,
+            document_info=context.document_info
+        )
+        
+        return evaluated_result
+    
+    # In agents/evaluator.py:
+    async def evaluate_items(
         self, 
         aggregated_items: Dict[str, Any], 
         document_info: Optional[Dict[str, Any]] = None
@@ -76,13 +92,49 @@ class EvaluatorAgent(BaseAgent):
         # Add rating scale information
         context["rating_scale"] = self._get_rating_scale_description()
         
-        # Execute the evaluation task
-        result = self.execute_task(context=context)
+        # Execute the evaluation task - ADD AWAIT HERE
+        result = await self.execute_task(context=context)
         
         # Enhance the result with evaluation metadata
         result = self._enhance_result_with_metadata(result, aggregated_items)
         
         return result
+    
+    def _get_stage_specific_content(self, context) -> str:
+        """Get stage-specific content for the prompt."""
+        # If context is a dictionary with aggregated_items
+        if isinstance(context, dict) and "aggregated_items" in context:
+            aggregated_items = context["aggregated_items"]
+            
+            # Get evaluation criteria if available
+            criteria_str = ""
+            if "evaluation_criteria" in context:
+                criteria = context["evaluation_criteria"]
+                criteria_str = "\n".join([f"- {level}: {desc}" for level, desc in criteria.items()])
+            
+            # Get rating scale if available
+            rating_scale = context.get("rating_scale", "")
+            
+            # Format aggregated items
+            items_summary = json.dumps(aggregated_items, indent=2, default=str)
+            
+            # Add truncation if too long
+            if len(items_summary) > 3000:
+                items_summary = items_summary[:3000] + "...\n[Output truncated]"
+            
+            return f"""
+            AGGREGATED ITEMS:
+            {items_summary}
+            
+            EVALUATION CRITERIA:
+            {criteria_str}
+            
+            RATING SCALE:
+            {rating_scale}
+            """
+        
+        # Otherwise, return empty string
+        return ""
     
     def _get_evaluation_criteria(self) -> Dict[str, str]:
         """
@@ -317,24 +369,24 @@ class EvaluatorAgent(BaseAgent):
         return priority_map.get(rating.lower(), 3)
     
     def _generate_impact_assessment(self, description: str, rating: str) -> str:
-            """
-            Generate a simple impact assessment based on the description and rating.
+        """
+        Generate a simple impact assessment based on the description and rating.
+        
+        Args:
+            description: Item description
+            rating: Item rating
             
-            Args:
-                description: Item description
-                rating: Item rating
-                
-            Returns:
-                Impact assessment text
-            """
-            # Generate a simple impact assessment based on rating
-            if rating.lower() == "critical":
-                return f"Severe impact that could significantly damage objectives or operations if not addressed immediately."
-            elif rating.lower() == "high":
-                return f"Substantial impact requiring prompt attention to prevent significant negative consequences."
-            elif rating.lower() == "medium":
-                return f"Moderate impact that should be addressed to improve effectiveness and efficiency."
-            elif rating.lower() == "low":
-                return f"Minor impact that could be addressed as part of normal improvements."
-            else:
-                return f"Impact level is unclear and requires further assessment."
+        Returns:
+            Impact assessment text
+        """
+        # Generate a simple impact assessment based on rating
+        if rating.lower() == "critical":
+            return f"Severe impact that could significantly damage objectives or operations if not addressed immediately."
+        elif rating.lower() == "high":
+            return f"Substantial impact requiring prompt attention to prevent significant negative consequences."
+        elif rating.lower() == "medium":
+            return f"Moderate impact that should be addressed to improve effectiveness and efficiency."
+        elif rating.lower() == "low":
+            return f"Minor impact that could be addressed as part of normal improvements."
+        else:
+            return f"Impact level is unclear and requires further assessment."

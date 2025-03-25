@@ -1,24 +1,30 @@
+# agents/planner.py
 """
 Planner Agent - Creates optimized, document-aware instructions for specialized agents.
+Works within the IssuesCrew and leverages ProcessingContext.
 """
 
-from typing import Dict, Any, List, Optional
 import json
 import logging
+from typing import Dict, Any, List, Optional
 from datetime import datetime
+
 from .base import BaseAgent
 
 logger = logging.getLogger(__name__)
 
 class PlannerAgent(BaseAgent):
     """
-    Meta-agent that creates tailored plans for document analysis crews.
+    Agent that creates tailored plans for document analysis.
+    Now designed to work within the IssuesCrew and use ProcessingContext.
     """
     
     def __init__(
         self,
         llm_client,
+        crew_type: str,
         config: Optional[Dict[str, Any]] = None,
+        config_manager = None,
         verbose: bool = True,
         max_chunk_size: int = 2000,
         max_rpm: int = 10
@@ -27,14 +33,42 @@ class PlannerAgent(BaseAgent):
         super().__init__(
             llm_client=llm_client,
             agent_type="planner",
-            crew_type="meta",
+            crew_type=crew_type,
             config=config,
+            config_manager=config_manager,
             verbose=verbose,
             max_chunk_size=max_chunk_size,
             max_rpm=max_rpm
         )
     
-    def create_plan(
+    async def process(self, context):
+        """
+        Create a plan using the provided context.
+        
+        Args:
+            context: ProcessingContext object
+            
+        Returns:
+            Planning result
+        """
+        # Extract document info and user preferences from context
+        document_info = context.document_info
+        user_preferences = {
+            "detail_level": context.options.get("detail_level", "standard"),
+            "focus_areas": context.options.get("focus_areas", []),
+            "user_instructions": context.options.get("user_instructions", "")
+        }
+        
+        # Create plan
+        plan = self.create_plan(document_info, user_preferences, self.crew_type)
+        
+        # Store plan in context
+        context.agent_instructions = plan
+        
+        return plan
+    
+    # In agents/planner.py:
+    async def create_plan(
         self, 
         document_info: Dict[str, Any],
         user_preferences: Dict[str, Any],
@@ -75,9 +109,9 @@ class PlannerAgent(BaseAgent):
         )
         
         try:
-            # Get planning result from LLM
+            # Get planning result from LLM - ADD AWAIT HERE IF THIS IS ASYNC
             logger.info(f"Creating plan for {crew_type} crew")
-            planning_result = self.llm_client.generate_completion(prompt)
+            planning_result = await self.llm_client.generate_completion_async(prompt)
             
             # Parse the result
             plan = self._parse_planning_result(planning_result, crew_type, user_preferences)
@@ -118,7 +152,7 @@ class PlannerAgent(BaseAgent):
     def _get_agent_role_definitions(self, crew_type: str) -> str:
         """Get agent role definitions based on crew type from configuration."""
         # Get the agents section from config
-        crew_config = self.config_manager.get_config(crew_type)
+        crew_config = self.config
         agents_config = crew_config.get("agents", {})
         
         # Build role definitions string from config
@@ -329,3 +363,29 @@ class PlannerAgent(BaseAgent):
             "instructions": instructions,
             "emphasis": emphasis
         }
+    
+    def _get_stage_specific_content(self, context) -> str:
+        """Get stage-specific content for the prompt."""
+        document_info = context.document_info
+        user_preferences = {
+            "detail_level": context.options.get("detail_level", "standard"),
+            "focus_areas": context.options.get("focus_areas", []),
+            "user_instructions": context.options.get("user_instructions", "")
+        }
+        
+        # Get role definitions for the crew
+        role_definitions = self._get_agent_role_definitions(self.crew_type)
+        
+        # Return as formatted string
+        return f"""
+        DOCUMENT INFORMATION:
+        {json.dumps(self._simplify_document_info(document_info), indent=2)}
+        
+        USER PREFERENCES:
+        - Detail Level: {user_preferences.get('detail_level')}
+        - Focus Areas: {', '.join(user_preferences.get('focus_areas', [])) or 'None specified'}
+        - User Instructions: {user_preferences.get('user_instructions', '')}
+        
+        AGENT ROLES:
+        {role_definitions}
+        """

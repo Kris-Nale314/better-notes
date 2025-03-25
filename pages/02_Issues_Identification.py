@@ -1,7 +1,7 @@
 """
 Issues Identification Page - Better Notes
-Identifies problems, challenges, and risks in documents using the Planner-driven agent architecture.
-Completely integrated with UniversalLLMAdapter, simplified ConfigManager, and IssuesCrew.
+Identifies problems, challenges, and risks in documents using the enhanced architecture.
+Uses the improved Orchestrator with ProcessingContext and IssuesCrew with integrated Planner.
 """
 
 import os
@@ -15,11 +15,13 @@ import tempfile
 from typing import Dict, Any, Optional, List, Union
 
 import streamlit as st
+import asyncio
 
-# Import core components with proper error handling
-from universal_llm_adapter import UniversalLLMAdapter
-from config_manager import ConfigManager
+
+# Import core components
+from orchestrator import Orchestrator
 from orchestrator_factory import OrchestratorFactory
+from config_manager import ConfigManager
 
 # Import UI utilities
 from ui_utils.core_styling import apply_component_styles, apply_analysis_styles
@@ -27,7 +29,7 @@ from ui_utils.result_formatting import enhance_result_display, create_download_b
 from ui_utils.chat_interface import display_chat_interface
 from ui_utils.progress_tracking import create_progress_callback
 
-# Configure logging to both console and file
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -282,7 +284,7 @@ def save_output_to_file(content: Any) -> str:
 
 # Function to process document
 def process_document():
-    """Process the document with Planner-driven agent crews."""
+    """Process the document with our enhanced architecture."""
     # Check API key
     api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
@@ -351,9 +353,9 @@ def process_document():
         
         # Determine current stage based on progress value
         current_stage = None
-        if progress <= 0.15:
+        if progress <= 0.2:
             current_stage = "Planning"
-        elif progress <= 0.55:
+        elif progress <= 0.5:
             current_stage = "Extraction"
         elif progress <= 0.65:
             current_stage = "Aggregation"
@@ -430,33 +432,22 @@ def process_document():
             "Comprehensive": "comprehensive"
         }
         
-        # Calculate chunk size
-        max_chunk_size = (len(document_text) // num_chunks) + 100
-        
-        # Initialize UniversalLLMAdapter
-        llm_client = UniversalLLMAdapter(
-            api_key=api_key,
-            model=selected_model,
-            temperature=temperature
-        )
-        
-        # Store LLM client for chat interface
-        st.session_state.llm_client = llm_client
-        
-        # Create a config manager
+        # Create configuration manager
         config_manager = ConfigManager()
         
-        # Create orchestrator directly
-        logger.info("Creating orchestrator")
+        # Create the orchestrator using our factory
         orchestrator = OrchestratorFactory.create_orchestrator(
             api_key=api_key,
             model=selected_model,
             temperature=temperature,
-            max_chunk_size=max_chunk_size,
+            max_chunk_size=len(document_text) // num_chunks if num_chunks > 0 else 10000,
             max_rpm=max_rpm,
             verbose=show_agent_details,
             config_manager=config_manager
         )
+        
+        # Store LLM client for chat interface
+        st.session_state.llm_client = orchestrator.llm_client
         
         # Create processing options
         options = {
@@ -464,7 +455,7 @@ def process_document():
             "temperature": temperature,
             "crews": ["issues"],
             "min_chunks": num_chunks,
-            "max_chunk_size": max_chunk_size,
+            "max_chunk_size": len(document_text) // num_chunks if num_chunks > 0 else 10000,
             "max_rpm": max_rpm,
             "enable_reviewer": enable_reviewer,
             "detail_level": detail_map.get(detail_level, "standard"),
@@ -472,9 +463,10 @@ def process_document():
             "user_instructions": user_instructions
         }
         
-        logger.info("Starting document processing")
+        logger.info("Starting document processing with enhanced architecture")
+        
         # Process document with progress tracking
-        result = orchestrator.process_document(
+        result = orchestrator.process_document_sync(
             document_text,
             options=options,
             progress_callback=update_progress
@@ -486,17 +478,11 @@ def process_document():
                 st.json(result)
         
         # Store document info for chat
-        if "issues" in result and isinstance(result["issues"], dict) and "_metadata" in result["issues"]:
-            metadata = result["issues"]["_metadata"]
-            if "document_info" in metadata:
-                st.session_state.document_info = metadata["document_info"]
+        if "_metadata" in result and "document_info" in result["_metadata"]:
+            st.session_state.document_info = result["_metadata"]["document_info"]
         
         # Store results in session state
-        if "issues" in result:
-            st.session_state.agent_result = result["issues"]
-        else:
-            st.session_state.agent_result = result
-        
+        st.session_state.agent_result = result
         st.session_state.processing_complete = True
         st.session_state.processing_time = time.time() - start_time
         

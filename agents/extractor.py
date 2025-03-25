@@ -1,17 +1,22 @@
+# agents/extractor.py
 """
 Extractor Agent - Specialized in identifying items in document chunks.
-Supports the metadata-layered approach through configuration.
+Works with ProcessingContext and integrated crew architecture.
 """
 
-from typing import Dict, Any, List, Optional
 import json
+import logging
+from typing import Dict, Any, List, Optional
 from datetime import datetime
+
 from .base import BaseAgent
+
+logger = logging.getLogger(__name__)
 
 class ExtractorAgent(BaseAgent):
     """
     Agent specialized in extracting specific information from document chunks.
-    Adds metadata to extracted items based on configuration.
+    Adds metadata to extracted items and works with ProcessingContext.
     """
     
     def __init__(
@@ -19,10 +24,10 @@ class ExtractorAgent(BaseAgent):
         llm_client,
         crew_type: str,
         config: Optional[Dict[str, Any]] = None,
+        config_manager = None,
         verbose: bool = True,
         max_chunk_size: int = 1500,
-        max_rpm: int = 10,
-        **kwargs # Accept any additional kwargs
+        max_rpm: int = 10
     ):
         """
         Initialize an extractor agent.
@@ -31,23 +36,67 @@ class ExtractorAgent(BaseAgent):
             llm_client: LLM client for agent communication
             crew_type: Type of crew (issues, actions, opportunities)
             config: Optional pre-loaded configuration
+            config_manager: Optional config manager
             verbose: Whether to enable verbose mode
             max_chunk_size: Maximum size of text chunks to process
             max_rpm: Maximum requests per minute
-            custom_instructions: Custom instructions from Instructor agent
         """
         super().__init__(
             llm_client=llm_client,
             agent_type="extraction",
             crew_type=crew_type,
             config=config,
+            config_manager=config_manager,
             verbose=verbose,
             max_chunk_size=max_chunk_size,
-            max_rpm=max_rpm, 
-            **kwargs # Pass any additional kwargs to the base class
+            max_rpm=max_rpm
         )
     
-    def extract_from_chunk(
+    async def process(self, context):
+        """
+        Process chunks using the context.
+        
+        Args:
+            context: ProcessingContext object
+            
+        Returns:
+            Extraction results for all chunks
+        """
+        # Get chunks and metadata from context
+        chunks = context.chunks
+        chunk_metadata = context.chunk_metadata
+        
+        # Process each chunk
+        extraction_results = []
+        for i, chunk in enumerate(chunks):
+            # Get metadata for this chunk
+            metadata = chunk_metadata[i] if i < len(chunk_metadata) else {"index": i}
+            
+            # Extract from this chunk
+            result = self.extract_from_chunk(
+                chunk=chunk,
+                document_info=context.document_info,
+                chunk_metadata=metadata
+            )
+            
+            # Add to results
+            extraction_results.append(result)
+            
+            # Update progress in context if available
+            if hasattr(context, 'update_progress') and context.metadata.get('progress_callback'):
+                progress_base = 0.22  # Starting point for extraction
+                progress_per_chunk = 0.28 / len(chunks)  # 28% of total progress is for extraction
+                progress = progress_base + (i + 1) * progress_per_chunk
+                context.update_progress(
+                    progress,
+                    f"Extracted from chunk {i+1}/{len(chunks)}",
+                    context.metadata.get('progress_callback')
+                )
+        
+        return extraction_results
+    
+    # In agents/extractor.py:
+    async def extract_from_chunk(
         self, 
         chunk: str, 
         document_info: Optional[Dict[str, Any]] = None,
@@ -59,7 +108,7 @@ class ExtractorAgent(BaseAgent):
         Args:
             chunk: Text chunk to analyze
             document_info: Optional document metadata
-            chunk_metadata: Optional metadata about the chunk (position, type, etc.)
+            chunk_metadata: Optional metadata about the chunk
             
         Returns:
             Extraction results
@@ -96,13 +145,35 @@ class ExtractorAgent(BaseAgent):
             if "index" in chunk_metadata:
                 context["chunk_index"] = chunk_metadata["index"]
         
-        # Execute the extraction task
-        result = self.execute_task(context=context)
+        # Execute the extraction task - ADD AWAIT HERE
+        result = await self.execute_task(context=context)
         
         # Enhance the result with chunk metadata
         result = self._enhance_result_with_metadata(result, chunk_metadata)
         
         return result
+    
+    def _get_stage_specific_content(self, context) -> str:
+        """Get stage-specific content for the prompt."""
+        if not hasattr(context, 'document_chunk'):
+            return ""
+            
+        # Add document chunk
+        content = f"DOCUMENT CHUNK:\n{context['document_chunk']}\n\n"
+        
+        # Add position guidance if available
+        if 'position_guidance' in context:
+            content += f"POSITION GUIDANCE:\n{context['position_guidance']}\n\n"
+        
+        # Add chunk type guidance if available
+        if 'type_guidance' in context:
+            content += f"CHUNK TYPE GUIDANCE:\n{context['type_guidance']}\n\n"
+        
+        # Add chunk index if available
+        if 'chunk_index' in context:
+            content += f"CHUNK INDEX: {context['chunk_index']}\n\n"
+            
+        return content
     
     def _enhance_result_with_metadata(self, result: Any, chunk_metadata: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -267,3 +338,50 @@ class ExtractorAgent(BaseAgent):
         }
         
         return guidance.get(chunk_type, "")
+    
+    def extract_keywords(self, text: str, max_keywords: int = 5) -> List[str]:
+        """
+        Extract key keywords from text for better metadata.
+        
+        Args:
+            text: Text to analyze
+            max_keywords: Maximum number of keywords to extract
+            
+        Returns:
+            List of extracted keywords
+        """
+        # This is a simple keyword extraction implementation
+        # Could be enhanced with NLP libraries in a real implementation
+        
+        # Get focus area keywords from config
+        focus_area_keywords = []
+        focus_areas = self.config.get("user_options", {}).get("focus_areas", {})
+        for area, info in focus_areas.items():
+            if "keywords" in info:
+                focus_area_keywords.extend(info["keywords"])
+        
+        # Create a basic keyword frequency counter
+        import re
+        from collections import Counter
+        
+        # Tokenize and clean text
+        words = re.findall(r'\b[a-zA-Z]{3,}\b', text.lower())
+        
+        # Remove common stopwords (simplified list)
+        stopwords = {"the", "and", "to", "of", "a", "in", "that", "it", "with", "for", "on", "is", "was", "be", "this", "are"}
+        filtered_words = [word for word in words if word not in stopwords]
+        
+        # Count frequencies
+        word_counts = Counter(filtered_words)
+        
+        # Prioritize focus area keywords that appear in the text
+        prioritized_keywords = [word for word in focus_area_keywords if word in word_counts]
+        
+        # Add other frequent words up to max_keywords
+        remaining_slots = max_keywords - len(prioritized_keywords)
+        if remaining_slots > 0:
+            other_keywords = [word for word, _ in word_counts.most_common(remaining_slots) 
+                             if word not in prioritized_keywords]
+            prioritized_keywords.extend(other_keywords)
+        
+        return prioritized_keywords[:max_keywords]

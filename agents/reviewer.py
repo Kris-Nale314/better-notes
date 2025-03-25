@@ -1,17 +1,23 @@
+# agents/reviewer.py
 """
 Reviewer Agent - Ensures the analysis meets quality standards and user expectations.
-Supports the metadata-layered approach through configuration.
+Works with ProcessingContext and integrated crew architecture.
 """
 
-from typing import Dict, Any, Optional, List, Union, Tuple
 import json
+import logging
+from typing import Dict, Any, Optional, List, Union, Tuple
 from datetime import datetime
+
 from .base import BaseAgent
+
+logger = logging.getLogger(__name__)
 
 class ReviewerAgent(BaseAgent):
     """
     Agent specialized in reviewing analysis output to ensure quality and alignment.
     Acts as a final quality check before delivering results to the user.
+    Works with ProcessingContext.
     """
     
     def __init__(
@@ -19,35 +25,47 @@ class ReviewerAgent(BaseAgent):
         llm_client,
         crew_type: str,
         config: Optional[Dict[str, Any]] = None,
+        config_manager = None,
         verbose: bool = True,
         max_chunk_size: int = 1500,
-        max_rpm: int = 10,  
-        **kwargs # Accept any additional kwargs
+        max_rpm: int = 10
     ):
-        """
-        Initialize a reviewer agent.
-        
-        Args:
-            llm_client: LLM client for agent communication
-            crew_type: Type of crew (issues, actions, opportunities)
-            config: Optional pre-loaded configuration
-            verbose: Whether to enable verbose mode
-            max_chunk_size: Maximum size of text chunks to process
-            max_rpm: Maximum requests per minute for API rate limiting
-            custom_instructions: Custom instructions from Instructor agent
-        """
+        """Initialize a reviewer agent."""
         super().__init__(
             llm_client=llm_client,
             agent_type="reviewer",
             crew_type=crew_type,
             config=config,
+            config_manager=config_manager,
             verbose=verbose,
             max_chunk_size=max_chunk_size,
-            max_rpm=max_rpm,
-            **kwargs # Pass any additional kwargs to the base class
+            max_rpm=max_rpm
         )
     
-    def review_analysis(
+    async def process(self, context):
+        """
+        Process formatted report using the context.
+        
+        Args:
+            context: ProcessingContext object
+            
+        Returns:
+            Review results
+        """
+        # Get formatted report from context
+        formatted_result = context.results.get("formatting", {})
+        
+        # Review the report
+        review_result = self.review_analysis(
+            formatted_result=formatted_result,
+            document_info=context.document_info,
+            user_preferences=context.options
+        )
+        
+        return review_result
+        
+    # In agents/reviewer.py:
+    async def review_analysis(
         self,
         formatted_result: Any,
         document_info: Optional[Dict[str, Any]] = None,
@@ -106,13 +124,57 @@ class ReviewerAgent(BaseAgent):
         if detail_guidance:
             context["detail_level_guidance"] = detail_guidance
         
-        # Execute the review task
-        result = self.execute_task(context=context)
+        # Execute the review task - ADD AWAIT HERE
+        result = await self.execute_task(context=context)
         
         # Enhance the result with review metadata
         result = self._enhance_result_with_metadata(result, user_preferences)
         
         return result
+
+    def _get_stage_specific_content(self, context) -> str:
+        """Get stage-specific content for the prompt."""
+        # If context is a dictionary
+        if isinstance(context, dict):
+            content_parts = []
+            
+            # Add formatted result if available
+            if "formatted_result" in context:
+                formatted_result = context["formatted_result"]
+                
+                # Truncate if too long
+                if len(formatted_result) > 3000:
+                    formatted_result = formatted_result[:3000] + "...\n[Result truncated]"
+                
+                content_parts.append(f"CONTENT TO REVIEW:\n{formatted_result}")
+            
+            # Add user instructions if available
+            if "user_instructions" in context and context["user_instructions"]:
+                content_parts.append(f"USER INSTRUCTIONS:\n{context['user_instructions']}")
+            
+            # Add focus areas if available
+            if "focus_areas" in context and context["focus_areas"]:
+                content_parts.append(f"FOCUS AREAS:\n{', '.join(context['focus_areas'])}")
+            
+            # Add focus area guidance if available
+            if "focus_area_guidance" in context:
+                content_parts.append(f"FOCUS AREA GUIDANCE:\n{context['focus_area_guidance']}")
+            
+            # Add detail level guidance if available
+            if "detail_level_guidance" in context:
+                content_parts.append(f"DETAIL LEVEL GUIDANCE:\n{context['detail_level_guidance']}")
+            
+            # Add review criteria if available
+            if "review_criteria" in context:
+                criteria = context["review_criteria"]
+                criteria_str = "\n".join([f"- {key}: {value}" for key, value in criteria.items()])
+                content_parts.append(f"REVIEW CRITERIA:\n{criteria_str}")
+            
+            # Join all parts
+            return "\n\n".join(content_parts)
+        
+        # Otherwise, return empty string
+        return ""
     
     def get_review_criteria(self) -> Dict[str, str]:
         """
