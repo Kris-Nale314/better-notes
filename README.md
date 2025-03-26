@@ -16,7 +16,7 @@
 `better-notes` breaks analysis into specialized tasks assigned to different agents, much like how a human team might divide complex work.
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logic.svg" alt="better-notes Logic" width="90%"/>
+  <img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/workflow.svg" alt="better-notes flow" width="90%"/>
 </div>
 
 ## 💡 Key Features
