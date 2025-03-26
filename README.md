@@ -1,22 +1,22 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logo.svg" alt="Better-Notes logo" width="180px"/>
+  <img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logo.svg" alt="better-notes logo" width="180px"/>
   <h3>Transform documents into structured insights with collaborative AI agents</h3>
 </div>
 
-# Better-Notes
+# better-notes
 ### *Agentic Document Analysis for Meaningful Insights*
 ---
 
 > *"Imagine if a team of analysts could review every document you read, extracting exactly what matters to you. That's the idea behind Better Notes."*
 
-## What is Better Notes?
+## What is `better-notes`?
 
-Better Notes is a project that uses AI agents working together to analyze documents and extract meaningful insights. It started as a personal exploration into document analysis and evolved into a playground for testing multi-agent AI architectures.
+`better-notes` is a project that uses AI agents working together to analyze documents and extract meaningful insights. It started as a personal exploration into document analysis and evolved into a playground for testing multi-agent AI architectures.
 
-Better Notes breaks analysis into specialized tasks assigned to different agents, much like how a human team might divide complex work.
+`better-notes` breaks analysis into specialized tasks assigned to different agents, much like how a human team might divide complex work.
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logic.svg" alt="Better-Notes Logic" width="90%"/>
+  <img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logic.svg" alt="better-notes Logic" width="90%"/>
 </div>
 
 ## 💡 Key Features
@@ -29,7 +29,7 @@ Better Notes breaks analysis into specialized tasks assigned to different agents
 
 ## 🧠 What is an Agent?
 
-In Better Notes, an "agent" isn't just a fancy name for a function call. Each agent:
+In `better-notes`, an "agent" isn't just a fancy name for a function call. Each agent:
 
 * Has a **specialized role** with specific responsibilities
 * Follows **dynamically generated instructions** tailored to each document
@@ -40,7 +40,7 @@ Think of agents as specialized experts who focus deeply on one aspect of documen
 
 ## 🤖 Meet the Agent Crew
 
-Better Notes uses a team of specialized agents that work together:
+`better-notes` uses a team of specialized agents that work together:
 
 ### 🧠 The Planner
 The meta-agent that analyzes your document and creates tailored instructions for all other agents. The Planner considers document type, user preferences, and special requirements to optimize the entire analytical process.
@@ -71,9 +71,9 @@ Performs quality control on the final output, ensuring the analysis meets qualit
 
 ## 🛠️ Core Architectural Patterns
 
-Better Notes implements four foundational patterns that elevate AI applications:
+`better-notes` implements four foundational patterns that elevate AI applications:
 
-| Pattern | What It Means | How Better Notes Uses It |
+| Pattern | What It Means | How `better-notes` Uses It |
 |---------|---------------|--------------------------|
 | **Reflection** | AI assessing its own outputs | Reviewer agent scores analysis quality across multiple dimensions |
 | **Tool Use** | AI invoking external capabilities | Agents access configs, document metadata, and processing services |
@@ -82,7 +82,7 @@ Better Notes implements four foundational patterns that elevate AI applications:
 
 ## 📝 The Journey: Building Through Experimentation
 
-Better Notes evolved through continuous experimentation:
+`better-notes` evolved through continuous experimentation:
 
 ```
 Simple Summarization → Multi-Stage Processing → Agent Specialization → Meta-Planning
@@ -142,7 +142,7 @@ better-notes/
 
 ## 💬 Try it yourself!
 
-Better Notes works best with:
+`better-notes` works best with:
 * Meeting transcripts
 * Technical documents
 * Business reports
@@ -153,7 +153,7 @@ Upload your documents and experiment with different detail levels and focus area
 
 ## 🔮 What's Next?
 
-Better Notes is both a functional tool and an experimental playground. Future directions include:
+`better-notes` is both a functional tool and an experimental playground. Future directions include:
 
 * Action Items crew for task extraction
 * Meeting Insights crew for participant and decision analysis 
@@ -163,20 +163,20 @@ Better Notes is both a functional tool and an experimental playground. Future di
 
 ## 📚 Learn More
 
-Interested in how Better Notes works under the hood? Check out:
+Interested in how `better-notes` works under the hood? Check out:
 * [Technical Architecture](docs/betterNotesArch.md) - Deep dive into the agent system
 * [Configuration Guide](docs/betterNotesConfig.md) - How to customize agent behavior
 
 
 ## 🤝 Contribution
 
-Contributions welcome! Whether you're interested in AI architecture, UI improvements, or new analysis types, Better Notes provides a foundation for experimentation.
+Contributions welcome! Whether you're interested in AI architecture, UI improvements, or new analysis types, `better-notes` provides a foundation for experimentation.
 
 <div align="center">
 
 ---
 
-<p>Better Notes is released under the MIT License</p>
+<p>better-notes is released under the MIT License</p>
 <p>Built with 💙 and lots of experimentation</p>
 
 </div>
