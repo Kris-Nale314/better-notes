@@ -599,7 +599,7 @@ def display_results(result, processing_time):
         # Download option
         st.divider()
         create_download_button(result, os.path.basename(saved_filepath))
-    
+        
     
     with result_tabs[1]:
         st.subheader("Chat about this Issues Report")
