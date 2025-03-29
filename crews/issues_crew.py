@@ -408,7 +408,7 @@ class IssuesCrew:
             Processing results
         """
         # Import ProcessingContext
-        from orchestrator import ProcessingContext
+        from process_context import ProcessingContext
         
         # Create options dictionary
         options = {

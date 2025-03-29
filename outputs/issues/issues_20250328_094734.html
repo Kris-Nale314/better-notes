@@ -1,0 +1,176 @@
+{
+  "review_result": {
+    "meets_requirements": true,
+    "summary": "Analysis completed successfully.",
+    "assessment": {
+      "overall": 4,
+      "completeness": 4,
+      "clarity": 4
+    }
+  },
+  "_metadata": {
+    "run_id": "run-61ebfd67-1743169652",
+    "processing_time": 2.207036018371582,
+    "document_info": {
+      "preview_analysis": {
+        "summary": "The document is about Dell Technologies Inc., its business segments, products, and services, as well as its financial results conference call for Fiscal Year 2025 Fourth Quarter.",
+        "client_name": "Dell Technologies Inc.",
+        "meeting_purpose": "Fiscal Year 2025 Fourth Quarter Financial Results Conference Call",
+        "key_topics": [
+          "Business segments (ISG, CSG, VMware)",
+          "Products and services offered",
+          "Financial results for Q4 FY2025"
+        ],
+        "domain_categories": [
+          "IT",
+          "Data",
+          "Cloud"
+        ],
+        "participants": [
+          "Operator"
+        ]
+      },
+      "is_meeting_transcript": true,
+      "preview_length": 2000,
+      "basic_stats": {
+        "char_count": 53891,
+        "char_count_no_spaces": 44997,
+        "word_count": 9358,
+        "sentence_count": 513,
+        "paragraph_count": 3,
+        "estimated_tokens": 13472
+      }
+    },
+    "stages": {
+      "document_analysis": {
+        "status": "completed",
+        "start_time": 1743169652.539831,
+        "progress": 1.0,
+        "end_time": 1743169654.729182,
+        "duration": 2.1893510818481445
+      },
+      "chunking": {
+        "status": "completed",
+        "start_time": 1743169654.72982,
+        "progress": 1.0,
+        "end_time": 1743169654.7398798,
+        "duration": 0.010059833526611328
+      },
+      "planning": {
+        "status": "completed",
+        "start_time": 1743169654.7404711,
+        "progress": 1.0,
+        "end_time": 1743169654.7412539,
+        "duration": 0.0007827281951904297
+      },
+      "extraction": {
+        "status": "failed",
+        "start_time": 1743169654.741465,
+        "progress": 0.0,
+        "end_time": 1743169654.743158,
+        "duration": 0.0016930103302001953,
+        "error": "Unknown agent type: extraction",
+        "traceback": "Traceback (most recent call last):\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 187, in process_document\n    result = await self._execute_stage_with_recovery(context, stage_name, crew_type)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 267, in _execute_stage_with_recovery\n    return await self._execute_stage(context, stage_name, crew_type)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 258, in _execute_stage\n    agent = self._get_agent(stage_name, crew_type)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 116, in _get_agent\n    raise ValueError(f\"Unknown agent type: {agent_type}\")\nValueError: Unknown agent type: extraction\n"
+      },
+      "aggregation": {
+        "status": "failed",
+        "start_time": 1743169654.743365,
+        "progress": 0.0,
+        "end_time": 1743169654.743847,
+        "duration": 0.0004818439483642578,
+        "error": "Unknown agent type: aggregation",
+        "traceback": "Traceback (most recent call last):\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 187, in process_document\n    result = await self._execute_stage_with_recovery(context, stage_name, crew_type)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 267, in _execute_stage_with_recovery\n    return await self._execute_stage(context, stage_name, crew_type)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 258, in _execute_stage\n    agent = self._get_agent(stage_name, crew_type)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 116, in _get_agent\n    raise ValueError(f\"Unknown agent type: {agent_type}\")\nValueError: Unknown agent type: aggregation\n"
+      },
+      "evaluation": {
+        "status": "failed",
+        "start_time": 1743169654.744056,
+        "progress": 0.0,
+        "end_time": 1743169654.74452,
+        "duration": 0.0004639625549316406,
+        "error": "Unknown agent type: evaluation",
+        "traceback": "Traceback (most recent call last):\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 187, in process_document\n    result = await self._execute_stage_with_recovery(context, stage_name, crew_type)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 267, in _execute_stage_with_recovery\n    return await self._execute_stage(context, stage_name, crew_type)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 258, in _execute_stage\n    agent = self._get_agent(stage_name, crew_type)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 116, in _get_agent\n    raise ValueError(f\"Unknown agent type: {agent_type}\")\nValueError: Unknown agent type: evaluation\n"
+      },
+      "formatting": {
+        "status": "failed",
+        "start_time": 1743169654.7446852,
+        "progress": 0.0,
+        "end_time": 1743169654.7452722,
+        "duration": 0.0005869865417480469,
+        "error": "Unknown agent type: formatting",
+        "traceback": "Traceback (most recent call last):\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 187, in process_document\n    result = await self._execute_stage_with_recovery(context, stage_name, crew_type)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 267, in _execute_stage_with_recovery\n    return await self._execute_stage(context, stage_name, crew_type)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 258, in _execute_stage\n    agent = self._get_agent(stage_name, crew_type)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 116, in _get_agent\n    raise ValueError(f\"Unknown agent type: {agent_type}\")\nValueError: Unknown agent type: formatting\n"
+      },
+      "review": {
+        "status": "completed",
+        "start_time": 1743169654.745492,
+        "progress": 1.0,
+        "end_time": 1743169654.745693,
+        "duration": 0.0002009868621826172
+      }
+    },
+    "errors": [
+      {
+        "stage": "extraction",
+        "message": "Unknown agent type: extraction",
+        "time": 1743169654.743159,
+        "traceback": "Traceback (most recent call last):\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 187, in process_document\n    result = await self._execute_stage_with_recovery(context, stage_name, crew_type)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 267, in _execute_stage_with_recovery\n    return await self._execute_stage(context, stage_name, crew_type)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 258, in _execute_stage\n    agent = self._get_agent(stage_name, crew_type)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 116, in _get_agent\n    raise ValueError(f\"Unknown agent type: {agent_type}\")\nValueError: Unknown agent type: extraction\n"
+      },
+      {
+        "stage": "aggregation",
+        "message": "Unknown agent type: aggregation",
+        "time": 1743169654.743847,
+        "traceback": "Traceback (most recent call last):\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 187, in process_document\n    result = await self._execute_stage_with_recovery(context, stage_name, crew_type)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 267, in _execute_stage_with_recovery\n    return await self._execute_stage(context, stage_name, crew_type)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 258, in _execute_stage\n    agent = self._get_agent(stage_name, crew_type)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 116, in _get_agent\n    raise ValueError(f\"Unknown agent type: {agent_type}\")\nValueError: Unknown agent type: aggregation\n"
+      },
+      {
+        "stage": "evaluation",
+        "message": "Unknown agent type: evaluation",
+        "time": 1743169654.744521,
+        "traceback": "Traceback (most recent call last):\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 187, in process_document\n    result = await self._execute_stage_with_recovery(context, stage_name, crew_type)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 267, in _execute_stage_with_recovery\n    return await self._execute_stage(context, stage_name, crew_type)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 258, in _execute_stage\n    agent = self._get_agent(stage_name, crew_type)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 116, in _get_agent\n    raise ValueError(f\"Unknown agent type: {agent_type}\")\nValueError: Unknown agent type: evaluation\n"
+      },
+      {
+        "stage": "formatting",
+        "message": "Unknown agent type: formatting",
+        "time": 1743169654.7452722,
+        "traceback": "Traceback (most recent call last):\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 187, in process_document\n    result = await self._execute_stage_with_recovery(context, stage_name, crew_type)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 267, in _execute_stage_with_recovery\n    return await self._execute_stage(context, stage_name, crew_type)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 258, in _execute_stage\n    agent = self._get_agent(stage_name, crew_type)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/kris/AI-Apps/better-notes/orchestrator_langchain.py\", line 116, in _get_agent\n    raise ValueError(f\"Unknown agent type: {agent_type}\")\nValueError: Unknown agent type: formatting\n"
+      }
+    ],
+    "warnings": [],
+    "options": {
+      "model_name": "gpt-3.5-turbo",
+      "temperature": 0.2,
+      "crew_type": "issues",
+      "min_chunks": 8,
+      "max_chunk_size": 6736,
+      "max_rpm": 10,
+      "enable_reviewer": true,
+      "detail_level": "standard",
+      "focus_areas": [],
+      "user_instructions": ""
+    },
+    "plan": {
+      "planning": {
+        "instructions": "Process issues data",
+        "emphasis": "Focus on identifying problems that impact objectives or efficiency"
+      },
+      "extraction": {
+        "instructions": "Process issues data",
+        "emphasis": "Focus on identifying problems that impact objectives or efficiency"
+      },
+      "aggregation": {
+        "instructions": "Process issues data",
+        "emphasis": "Focus on identifying problems that impact objectives or efficiency"
+      },
+      "evaluation": {
+        "instructions": "Process issues data",
+        "emphasis": "Focus on identifying problems that impact objectives or efficiency"
+      },
+      "formatting": {
+        "instructions": "Process issues data",
+        "emphasis": "Focus on identifying problems that impact objectives or efficiency"
+      },
+      "review": {
+        "instructions": "Process issues data",
+        "emphasis": "Focus on identifying problems that impact objectives or efficiency"
+      }
+    }
+  }
+}

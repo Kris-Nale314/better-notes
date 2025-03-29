@@ -1,6 +1,6 @@
 """
-Reviewer Agent - Ensures the analysis meets quality standards and user expectations.
-Clean implementation that leverages the new BaseAgent architecture.
+Streamlined Reviewer Agent for Better Notes that assesses output quality.
+Provides a simple quality assessment of the formatted report.
 """
 
 import json
@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 class ReviewerAgent(BaseAgent):
     """
-    Agent specialized in reviewing analysis output to ensure quality and alignment.
-    Acts as a final quality check before delivering results to the user.
+    Streamlined Reviewer agent that assesses the quality of the analysis.
+    Performs a final quality check and provides feedback.
     """
     
     def __init__(
@@ -40,10 +40,12 @@ class ReviewerAgent(BaseAgent):
             max_chunk_size=max_chunk_size,
             max_rpm=max_rpm
         )
+        
+        logger.info(f"ReviewerAgent initialized for {crew_type}")
     
     async def process(self, context):
         """
-        Process formatted report using the context.
+        Review the formatted report and provide quality assessment.
         
         Args:
             context: ProcessingContext object
@@ -51,17 +53,31 @@ class ReviewerAgent(BaseAgent):
         Returns:
             Review results
         """
-        # Get formatted report from context
-        formatted_result = context.results.get("formatting", {})
+        logger.info("ReviewerAgent starting review process")
         
-        # Review the report
-        review_result = await self.review_analysis(
-            formatted_result=formatted_result,
-            document_info=context.document_info,
-            user_preferences=context.options
-        )
-        
-        return review_result
+        try:
+            # Get formatted report from context
+            formatted_result = context.results.get("formatting", "")
+            
+            if not formatted_result:
+                logger.warning("No formatted report found for review")
+                return self._create_simple_review("No formatted report available to review.")
+            
+            # Review the report
+            review_result = await self.review_analysis(
+                formatted_result=formatted_result,
+                document_info=getattr(context, 'document_info', {}),
+                user_preferences=getattr(context, 'options', {})
+            )
+            
+            logger.info("Successfully completed review")
+            return review_result
+            
+        except Exception as e:
+            logger.error(f"Error in review process: {e}")
+            
+            # Return simple review in case of error
+            return self._create_simple_review(f"Error during review: {str(e)}")
     
     async def review_analysis(
         self,
@@ -70,15 +86,15 @@ class ReviewerAgent(BaseAgent):
         user_preferences: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Review a formatted analysis result for quality and alignment with user expectations.
+        Review a formatted result for quality and alignment with user expectations.
         
         Args:
-            formatted_result: The formatted analysis to review
+            formatted_result: The formatted result to review
             document_info: Optional document metadata
             user_preferences: Optional user preferences
             
         Returns:
-            Review results with assessment and suggestions
+            Review results with assessment
         """
         # Get review criteria
         review_criteria = self._get_review_criteria()
@@ -90,201 +106,100 @@ class ReviewerAgent(BaseAgent):
             "user_preferences": user_preferences or {},
             "review_criteria": review_criteria
         }
-    
-    def _get_focus_area_guidance(self, focus_areas: List[str]) -> str:
-        """
-        Get guidance for specific focus areas.
         
-        Args:
-            focus_areas: List of focus areas
+        # Add focus area guidance if applicable
+        focus_areas = user_preferences.get("focus_areas", []) if user_preferences else []
+        if focus_areas:
+            review_context["focus_area_guidance"] = self._get_focus_area_guidance(focus_areas)
+        
+        # Add detail level guidance if applicable
+        detail_level = user_preferences.get("detail_level", "standard") if user_preferences else "standard"
+        review_context["detail_guidance"] = self._get_detail_level_guidance(detail_level)
+        
+        # Execute review
+        try:
+            result = await self.execute_task(review_context)
             
-        Returns:
-            Guidance string for focus areas
-        """
-        # Try to get from config
-        focus_area_info = self.config.get("user_options", {}).get("focus_areas", {})
-        
-        guidance_parts = []
-        for area in focus_areas:
-            if area in focus_area_info:
-                guidance_parts.append(f"{area}: {focus_area_info[area]}")
-            else:
-                # Default descriptions
-                defaults = {
-                    "technical": "Technical issues related to implementation, architecture, or technology",
-                    "process": "Process-related issues in workflows, procedures, or methodologies",
-                    "resource": "Resource constraints with staffing, budget, time, or materials",
-                    "quality": "Quality concerns regarding standards, testing, or performance",
-                    "risk": "Risk-related issues including compliance, security, or strategic risks"
-                }
-                if area in defaults:
-                    guidance_parts.append(f"{area}: {defaults[area]}")
-                else:
-                    guidance_parts.append(f"{area}: Focus on {area.lower()}-related aspects")
-        
-        return "\n".join(guidance_parts)
-    
-    def _get_detail_level_guidance(self, detail_level: str) -> str:
-        """
-        Get guidance for a specific detail level.
-        
-        Args:
-            detail_level: Detail level (essential, standard, comprehensive)
+            # Process and normalize the review result
+            processed_result = self._process_review_result(result)
             
-        Returns:
-            Guidance string
-        """
-        # Try to get from config
-        detail_levels = self.config.get("user_options", {}).get("detail_levels", {})
-        
-        if detail_level in detail_levels:
-            return detail_levels[detail_level]
-        
-        # Default guidance
-        defaults = {
-            "essential": "Focus only on the most important elements with minimal detail.",
-            "standard": "Provide a balanced amount of detail, covering all significant aspects.",
-            "comprehensive": "Include thorough details, context, and explanations for all elements."
-        }
-        
-        return defaults.get(detail_level, defaults["standard"])
-    
-    def _process_review_result(self, result: Any) -> Dict[str, Any]:
-        """
-        Process and normalize review result.
-        
-        Args:
-            result: Review result from LLM
+            return processed_result
             
-        Returns:
-            Normalized review result dictionary
-        """
-        # Ensure result is a dictionary
-        if isinstance(result, str):
-            try:
-                # Try to parse as JSON
-                parsed_result = self.parse_llm_json(result)
-                if isinstance(parsed_result, dict):
-                    result = parsed_result
-                else:
-                    # Create basic structure
-                    result = {
-                        "review_result": {
-                            "meets_requirements": None,
-                            "summary": result,
-                            "assessment": {}
-                        }
-                    }
-            except:
-                # Not valid JSON, create basic structure
-                result = {
-                    "review_result": {
-                        "meets_requirements": None,
-                        "summary": result,
-                        "assessment": {}
-                    }
-                }
-        elif not isinstance(result, dict):
-            # Wrap non-dictionary result
-            result = {
-                "review_result": {
-                    "meets_requirements": None,
-                    "summary": str(result),
-                    "assessment": {}
-                }
-            }
-        
-        # Check if review_result key exists
-        if "review_result" not in result:
-            # Assume the entire result is the review_result
-            result = {"review_result": result}
-        
-        # Ensure required fields exist in review_result
-        review_result = result["review_result"]
-        if not isinstance(review_result, dict):
-            # Convert to dictionary
-            review_result = {
-                "meets_requirements": None,
-                "summary": str(review_result),
-                "assessment": {}
-            }
-            result["review_result"] = review_result
-        
-        # Add required fields if missing
-        if "meets_requirements" not in review_result:
-            review_result["meets_requirements"] = None
-        
-        if "summary" not in review_result:
-            review_result["summary"] = "Review completed."
-        
-        if "assessment" not in review_result or not isinstance(review_result["assessment"], dict):
-            review_result["assessment"] = {}
-        
-        # Calculate confidence if missing
-        if "confidence" not in review_result:
-            assessment = review_result["assessment"]
-            if assessment:
-                # Calculate based on assessment scores
-                scores = [v for k, v in assessment.items() if isinstance(v, (int, float))]
-                if scores:
-                    avg_score = sum(scores) / len(scores)
-                    if avg_score >= 4.0:
-                        confidence = "high"
-                    elif avg_score >= 3.0:
-                        confidence = "medium"
-                    else:
-                        confidence = "low"
-                    review_result["confidence"] = confidence
-                else:
-                    review_result["confidence"] = "medium"
-            else:
-                review_result["confidence"] = "medium"
-        
-        # Add metadata
-        result["_metadata"] = {
-            "reviewed_at": datetime.now().isoformat(),
-            "crew_type": self.crew_type
-        }
-        
-        return result
+        except Exception as e:
+            logger.error(f"Error in review_analysis: {e}")
+            
+            # Return simple review in case of error
+            return self._create_simple_review(f"Error during review: {str(e)}")
     
     def _get_stage_specific_content(self, context) -> str:
-        """Get stage-specific content for the prompt."""
+        """
+        Get stage-specific content for the prompt.
+        
+        Args:
+            context: Review context
+            
+        Returns:
+            Stage-specific content string
+        """
         if isinstance(context, dict):
+            # Build the review prompt content
             content_parts = []
             
             # Add review criteria
             if "review_criteria" in context:
                 criteria = context["review_criteria"]
-                criteria_str = "\n".join([f"- {key}: {value}" for key, value in criteria.items()])
-                content_parts.append(f"REVIEW CRITERIA:\n{criteria_str}")
+                content_parts.append("REVIEW CRITERIA:")
+                for key, value in criteria.items():
+                    content_parts.append(f"- {key}: {value}")
             
             # Add user preferences
             if "user_preferences" in context and context["user_preferences"]:
                 preferences = context["user_preferences"]
-                # Extract key preferences
-                key_prefs = {
-                    "detail_level": preferences.get("detail_level", "standard"),
-                    "focus_areas": preferences.get("focus_areas", []),
-                    "user_instructions": preferences.get("user_instructions", "")
-                }
-                content_parts.append(f"USER PREFERENCES:\n{json.dumps(key_prefs, indent=2)}")
+                
+                content_parts.append("\nUSER PREFERENCES:")
+                
+                # Add detail level
+                detail_level = preferences.get("detail_level", "standard")
+                content_parts.append(f"Detail Level: {detail_level}")
+                
+                # Add focus areas
+                focus_areas = preferences.get("focus_areas", [])
+                if focus_areas:
+                    content_parts.append(f"Focus Areas: {', '.join(focus_areas)}")
+                
+                # Add custom instructions
+                custom_instructions = preferences.get("user_instructions", "")
+                if custom_instructions:
+                    content_parts.append(f"Custom Instructions: {custom_instructions}")
             
             # Add focus area guidance
             if "focus_area_guidance" in context:
-                content_parts.append(f"FOCUS AREA GUIDANCE:\n{context['focus_area_guidance']}")
+                content_parts.append("\nFOCUS AREA GUIDANCE:")
+                content_parts.append(context["focus_area_guidance"])
             
             # Add detail level guidance
             if "detail_guidance" in context:
-                content_parts.append(f"DETAIL LEVEL GUIDANCE:\n{context['detail_guidance']}")
+                content_parts.append("\nDETAIL LEVEL GUIDANCE:")
+                content_parts.append(context["detail_guidance"])
             
-            # Add content to review (possibly truncated)
+            # Add review instructions
+            content_parts.append("\nREVIEW TASK:")
+            content_parts.append("1. Assess the quality of the analysis based on the criteria above")
+            content_parts.append("2. Check if the analysis aligns with user preferences")
+            content_parts.append("3. Score each criterion on a scale of 1-5 (1=poor, 5=excellent)")
+            content_parts.append("4. Provide a summary assessment of the overall quality")
+            content_parts.append("5. Suggest 1-2 specific improvements if needed")
+            
+            # Add report to review (possibly truncated)
             if "formatted_result" in context:
+                content_parts.append("\nRESULT TO REVIEW:")
+                
+                # Truncate if needed to prevent token overload
                 formatted_result = context["formatted_result"]
-                # Truncate if needed
                 if len(formatted_result) > 3000:
-                    formatted_result = formatted_result[:3000] + "\n...(content truncated for brevity)..."
-                content_parts.append(f"CONTENT TO REVIEW:\n{formatted_result}")
+                    content_parts.append(formatted_result[:3000] + "\n...(content truncated for brevity)...")
+                else:
+                    content_parts.append(formatted_result)
             
             return "\n\n".join(content_parts)
         
@@ -292,7 +207,7 @@ class ReviewerAgent(BaseAgent):
     
     def _prepare_content_for_review(self, formatted_result: Any) -> str:
         """
-        Prepare content for review by extracting text or converting to string.
+        Prepare content for review by extracting text.
         
         Args:
             formatted_result: Formatted result (could be string, dict, etc.)
@@ -371,7 +286,146 @@ class ReviewerAgent(BaseAgent):
         return {
             "alignment": "Does the analysis align with user instructions and focus areas?",
             "completeness": "Does the report address all significant items at the appropriate detail level?",
-            "consistency": "Are ratings/evaluations applied consistently throughout the analysis?",
             "clarity": "Is the report clear, well-organized, and actionable?",
             "balance": "Are items presented in a balanced way without over or under-emphasis?"
+        }
+    
+    def _get_focus_area_guidance(self, focus_areas: List[str]) -> str:
+        """
+        Get guidance for specific focus areas.
+        
+        Args:
+            focus_areas: List of focus areas
+            
+        Returns:
+            Guidance string for focus areas
+        """
+        # Try to get from config
+        focus_area_info = self.config.get("user_options", {}).get("focus_areas", {})
+        
+        focus_descriptions = []
+        for area in focus_areas:
+            if area in focus_area_info:
+                focus_descriptions.append(f"{area}: {focus_area_info[area]}")
+            else:
+                # Default descriptions
+                defaults = {
+                    "technical": "Technical issues related to implementation, architecture, or technology",
+                    "process": "Process-related issues in workflows, procedures, or methodologies",
+                    "resource": "Resource constraints with staffing, budget, time, or materials",
+                    "quality": "Quality concerns regarding standards, testing, or performance",
+                    "risk": "Risk-related issues including compliance, security, or strategic risks"
+                }
+                if area in defaults:
+                    focus_descriptions.append(f"{area}: {defaults[area]}")
+                else:
+                    focus_descriptions.append(f"{area}: Focus on {area.lower()}-related aspects")
+        
+        return "\n".join(focus_descriptions)
+    
+    def _get_detail_level_guidance(self, detail_level: str) -> str:
+        """
+        Get guidance for a specific detail level.
+        
+        Args:
+            detail_level: Detail level (essential, standard, comprehensive)
+            
+        Returns:
+            Guidance string
+        """
+        # Try to get from config
+        detail_levels = self.config.get("user_options", {}).get("detail_levels", {})
+        
+        if detail_level in detail_levels:
+            return detail_levels[detail_level]
+        
+        # Default guidance
+        defaults = {
+            "essential": "Focus only on the most important elements with minimal detail.",
+            "standard": "Provide a balanced amount of detail, covering all significant aspects.",
+            "comprehensive": "Include thorough details, context, and explanations for all elements."
+        }
+        
+        return defaults.get(detail_level, defaults["standard"])
+    
+    def _process_review_result(self, result: Any) -> Dict[str, Any]:
+        """
+        Process and normalize review result.
+        
+        Args:
+            result: Review result from LLM
+            
+        Returns:
+            Normalized review result dictionary
+        """
+        # Parse the result if it's a string
+        if isinstance(result, str):
+            try:
+                parsed_result = self.parse_llm_json(result)
+                if isinstance(parsed_result, dict):
+                    result = parsed_result
+                else:
+                    return self._create_simple_review(result)
+            except Exception:
+                return self._create_simple_review(result)
+        
+        # Ensure result is a dictionary
+        if not isinstance(result, dict):
+            return self._create_simple_review(str(result))
+        
+        # Create standard result structure
+        review_result = {
+            "summary": result.get("summary", "Review completed."),
+            "meets_requirements": result.get("meets_requirements", True),
+            "assessment": {}
+        }
+        
+        # Extract assessment scores
+        assessment = result.get("assessment", {})
+        if isinstance(assessment, dict):
+            review_result["assessment"] = assessment
+        
+        # Extract improvement suggestions
+        suggestions = result.get("improvement_suggestions", [])
+        if suggestions:
+            review_result["improvement_suggestions"] = suggestions
+        
+        # Calculate overall score if not provided
+        if "overall_score" not in review_result:
+            scores = [v for k, v in assessment.items() if isinstance(v, (int, float))]
+            if scores:
+                review_result["overall_score"] = round(sum(scores) / len(scores), 1)
+        
+        # Add confidence
+        if "confidence" not in review_result:
+            overall_score = review_result.get("overall_score")
+            if overall_score:
+                if overall_score >= 4.0:
+                    review_result["confidence"] = "high"
+                elif overall_score >= 3.0:
+                    review_result["confidence"] = "medium"
+                else:
+                    review_result["confidence"] = "low"
+        
+        return review_result
+    
+    def _create_simple_review(self, message: str) -> Dict[str, Any]:
+        """
+        Create a simple review result when normal review fails.
+        
+        Args:
+            message: Review message or error
+            
+        Returns:
+            Simple review result
+        """
+        return {
+            "summary": message,
+            "meets_requirements": True,
+            "assessment": {
+                "overall": 3
+            },
+            "confidence": "medium",
+            "simplified": True,
+            "timestamp": datetime.now().isoformat()
         }

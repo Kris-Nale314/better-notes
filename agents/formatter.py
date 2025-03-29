@@ -1,18 +1,11 @@
 """
-FormatterAgent - Streamlit-compatible formatter for creating structured reports.
-Completely rewritten to ensure proper HTML rendering in Streamlit.
-
-This agent produces HTML reports that:
-1. Render correctly in Streamlit using st.markdown with unsafe_allow_html=True
-2. Match the CSS classes defined in core_styling.py
-3. Handle issues, actions, and other report types
-4. Provide consistent formatting and styling across all reports
+Updated FormatterAgent that produces HTML compatible with Streamlit's dark theme.
 """
 
 import json
 import logging
 import re
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 from .base import BaseAgent
@@ -21,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 class FormatterAgent(BaseAgent):
     """
-    Agent specialized in formatting analysis results into reports that render properly in Streamlit.
-    Creates well-formed HTML that works with Streamlit's markdown rendering engine.
+    Formatter agent that creates structured output for Streamlit with dark theme compatibility.
+    Creates well-formatted reports that look good on both light and dark themes.
     """
     
     def __init__(
@@ -35,7 +28,7 @@ class FormatterAgent(BaseAgent):
         max_chunk_size: int = 1500,
         max_rpm: int = 10
     ):
-        """Initialize a Streamlit-optimized formatter agent."""
+        """Initialize a formatter agent."""
         super().__init__(
             llm_client=llm_client,
             agent_type="formatter",
@@ -46,61 +39,78 @@ class FormatterAgent(BaseAgent):
             max_chunk_size=max_chunk_size,
             max_rpm=max_rpm
         )
+        
+        logger.info(f"FormatterAgent initialized for {crew_type}")
     
     async def process(self, context):
         """
-        Process evaluated results using the context and create a Streamlit-friendly report.
+        Format evaluation results into a structured report.
         
         Args:
             context: ProcessingContext object
             
         Returns:
-            Formatted report as HTML string or structured dictionary
+            Formatted report as HTML
         """
-        # Get evaluation results from context
-        evaluated_result = context.results.get("evaluation", {})
+        logger.info("FormatterAgent starting formatting process")
         
-        if not evaluated_result:
-            logger.warning("No evaluation results found for formatting")
-            return self._create_error_report("No evaluation results available")
-        
-        # Format the report based on crew type
-        if self.crew_type == "issues":
-            formatted_result = self._format_issues_report(evaluated_result, context)
-        elif self.crew_type == "actions":
-            formatted_result = self._format_actions_report(evaluated_result, context)
-        else:
-            formatted_result = self._format_generic_report(evaluated_result, context)
-        
-        return formatted_result
+        try:
+            # Get evaluation results from context
+            evaluated_result = context.results.get("evaluation", {})
+            
+            if not evaluated_result:
+                logger.warning("No evaluation results found for formatting")
+                return self._create_error_report("No evaluation results available")
+            
+            # Format the report based on crew type
+            if self.crew_type == "issues":
+                formatted_result = self._format_issues_report(evaluated_result, context)
+            else:
+                formatted_result = self._format_generic_report(evaluated_result, context)
+            
+            logger.info("Successfully formatted report")
+            return formatted_result
+            
+        except Exception as e:
+            logger.error(f"Error in formatting process: {e}")
+            
+            # Return error report
+            return self._create_error_report(f"Error formatting report: {str(e)}")
     
     def _format_issues_report(self, evaluated_result: Dict[str, Any], context) -> str:
         """
-        Format issues data into a Streamlit-friendly HTML report.
+        Format issues into a clean HTML report for Streamlit with dark theme compatibility.
         
         Args:
-            evaluated_result: Evaluated issues data
-            context: Processing context
+            evaluated_result: Evaluated issues
+            context: ProcessingContext
             
         Returns:
-            HTML report string
+            HTML report
         """
-        # Extract issues by severity
-        critical_issues = evaluated_result.get("critical_issues", [])
-        high_issues = evaluated_result.get("high_issues", [])
-        medium_issues = evaluated_result.get("medium_issues", [])
-        low_issues = evaluated_result.get("low_issues", [])
+        # Get issues by severity
+        critical_issues = self._get_issues_by_severity(evaluated_result, "critical")
+        high_issues = self._get_issues_by_severity(evaluated_result, "high")
+        medium_issues = self._get_issues_by_severity(evaluated_result, "medium")
+        low_issues = self._get_issues_by_severity(evaluated_result, "low")
         
-        # Get executive summary if available
-        executive_summary = evaluated_result.get("executive_summary", 
-                                                "No executive summary available.")
+        # Get executive summary if available, or generate one
+        executive_summary = evaluated_result.get("executive_summary", "")
+        if not executive_summary:
+            executive_summary = self._generate_summary(
+                critical_issues, high_issues, medium_issues, low_issues
+            )
         
-        # Get user preferences for display
+        # Get user preferences
         user_preferences = context.options if hasattr(context, "options") else {}
         detail_level = user_preferences.get("detail_level", "standard")
         
+        # Add CSS for dark theme compatibility
+        css = self._get_dark_theme_css()
+        
         # Build the HTML report
         html = [
+            f'<style>{css}</style>',
             f'<div class="issues-report">',
             f'<h1>Issues Analysis Report</h1>',
             
@@ -134,13 +144,241 @@ class FormatterAgent(BaseAgent):
             self._render_issues_list(low_issues, "low", detail_level),
             f'</div>',
             
-            # Generate summary stats if available
-            self._generate_summary_stats(evaluated_result),
-            
             f'</div>'  # Close issues-report div
         ]
         
         return "\n".join(html)
+    
+    def _get_dark_theme_css(self) -> str:
+        """
+        Get CSS for dark theme compatibility.
+        
+        Returns:
+            CSS string
+        """
+        return """
+        /* Base Styles */
+        .issues-report {
+            color: rgba(250, 250, 250, 0.95);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            padding: 1rem;
+            line-height: 1.5;
+        }
+        
+        .issues-report h1, .issues-report h2, .issues-report h3 {
+            color: rgba(255, 255, 255, 0.95);
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .issues-report p {
+            color: rgba(220, 220, 220, 0.95);
+            margin-bottom: 1rem;
+        }
+        
+        /* Card Styles */
+        .issue-card {
+            background-color: rgba(32, 33, 36, 0.6);
+            border-radius: 6px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid #666;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+        
+        .issue-card.critical {
+            border-left-color: #ff5252;
+        }
+        
+        .issue-card.high {
+            border-left-color: #ff9f43;
+        }
+        
+        .issue-card.medium {
+            border-left-color: #ffc107;
+        }
+        
+        .issue-card.low {
+            border-left-color: #20c997;
+        }
+        
+        .issue-card h3 {
+            margin-top: 0;
+            color: rgba(255, 255, 255, 0.95);
+        }
+        
+        /* Meta Info Styles */
+        .issue-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: 999px;
+            background-color: #666;
+            color: #fff;
+        }
+        
+        .badge-critical {
+            background-color: #ff5252;
+        }
+        
+        .badge-high {
+            background-color: #ff9f43;
+        }
+        
+        .badge-medium {
+            background-color: #ffc107;
+            color: #333;
+        }
+        
+        .badge-low {
+            background-color: #20c997;
+            color: #333;
+        }
+        
+        .category-badge {
+            background-color: rgba(102, 126, 234, 0.6);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            border-radius: 999px;
+        }
+        
+        /* Content Styles */
+        .issue-content {
+            margin-top: 0.75rem;
+        }
+        
+        .issue-content p {
+            margin-bottom: 0.5rem;
+        }
+        
+        .issue-content strong {
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        /* Section Styles */
+        .executive-summary {
+            background-color: rgba(44, 49, 60, 0.5);
+            border-radius: 6px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid #4e8cff;
+        }
+        
+        .issues-section {
+            margin-bottom: 2rem;
+        }
+        
+        /* Error Message */
+        .error-message {
+            background-color: rgba(255, 82, 82, 0.1);
+            border-left: 4px solid #ff5252;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+            color: rgba(250, 250, 250, 0.95);
+        }
+        
+        /* Source Information */
+        .source-info {
+            font-size: 0.8rem;
+            color: rgba(200, 200, 200, 0.8);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        """
+    
+    def _get_issues_by_severity(self, evaluated_result: Dict[str, Any], severity: str) -> List[Dict[str, Any]]:
+        """
+        Extract issues of a specific severity from evaluation results.
+        
+        Args:
+            evaluated_result: Evaluated results
+            severity: Severity level to extract
+            
+        Returns:
+            List of issues with the specified severity
+        """
+        # Check for direct severity lists in the result
+        severity_key = f"{severity}_issues"
+        if severity_key in evaluated_result and isinstance(evaluated_result[severity_key], list):
+            return evaluated_result[severity_key]
+        
+        # Otherwise, look in evaluated_issues
+        issues = []
+        if "evaluated_issues" in evaluated_result and isinstance(evaluated_result["evaluated_issues"], list):
+            for issue in evaluated_result["evaluated_issues"]:
+                if isinstance(issue, dict) and issue.get("severity", "") == severity:
+                    issues.append(issue)
+        
+        return issues
+    
+    def _generate_summary(
+        self, 
+        critical_issues: List[Dict[str, Any]], 
+        high_issues: List[Dict[str, Any]],
+        medium_issues: List[Dict[str, Any]], 
+        low_issues: List[Dict[str, Any]]
+    ) -> str:
+        """
+        Generate a simple summary of issues found.
+        
+        Args:
+            critical_issues: List of critical issues
+            high_issues: List of high issues
+            medium_issues: List of medium issues
+            low_issues: List of low issues
+            
+        Returns:
+            Generated summary
+        """
+        total_issues = len(critical_issues) + len(high_issues) + len(medium_issues) + len(low_issues)
+        
+        if total_issues == 0:
+            return "No issues were identified in this document."
+        
+        summary = f"Analysis identified {total_issues} total issues: "
+        summary += f"{len(critical_issues)} critical, {len(high_issues)} high, "
+        summary += f"{len(medium_issues)} medium, and {len(low_issues)} low priority. "
+        
+        if len(critical_issues) > 0:
+            summary += "Critical attention is needed for " + self._list_issue_titles(critical_issues, 3) + ". "
+            
+        if len(high_issues) > 0:
+            summary += "High priority issues include " + self._list_issue_titles(high_issues, 3) + "."
+            
+        return summary
+    
+    def _list_issue_titles(self, issues: List[Dict[str, Any]], max_issues: int = 3) -> str:
+        """
+        Create a comma-separated list of issue titles.
+        
+        Args:
+            issues: List of issues
+            max_issues: Maximum number of issues to list
+            
+        Returns:
+            Comma-separated list of titles
+        """
+        if not issues:
+            return ""
+            
+        titles = [issue.get("title", "Untitled Issue") for issue in issues[:max_issues]]
+        
+        if len(issues) > max_issues:
+            return ", ".join(titles) + f", and {len(issues) - max_issues} more"
+        else:
+            return ", ".join(titles)
     
     def _render_issues_list(self, issues: List[Dict[str, Any]], severity: str, detail_level: str) -> str:
         """
@@ -148,11 +386,11 @@ class FormatterAgent(BaseAgent):
         
         Args:
             issues: List of issue dictionaries
-            severity: Severity level (critical, high, medium, low)
-            detail_level: Level of detail to include
+            severity: Severity level
+            detail_level: Detail level (essential, standard, comprehensive)
             
         Returns:
-            HTML string for the issues list
+            HTML for the issues list
         """
         if not issues:
             return "<p>No issues found in this category.</p>"
@@ -163,8 +401,7 @@ class FormatterAgent(BaseAgent):
             # Extract issue details with fallbacks
             title = issue.get("title", "Untitled Issue")
             description = issue.get("description", "")
-            impact = issue.get("impact", "")
-            context = issue.get("context", "")
+            impact = issue.get("impact", issue.get("impact_assessment", ""))
             category = issue.get("category", "")
             
             # Build issue card
@@ -173,7 +410,7 @@ class FormatterAgent(BaseAgent):
                 f'<h3>{title}</h3>',
                 
                 f'<div class="issue-meta">',
-                f'<span class="badge badge-{severity}">{severity.capitalize()}</span>',
+                f'<span class="badge badge-{severity}">{severity.capitalize()}</span>'
             ]
             
             # Add category if available
@@ -191,8 +428,12 @@ class FormatterAgent(BaseAgent):
                 if impact:
                     issue_html.append(f'<p><strong>Impact:</strong> {impact}</p>')
                 
-                if detail_level == "comprehensive" and context:
-                    issue_html.append(f'<p><strong>Context:</strong> {context}</p>')
+                if detail_level == "comprehensive":
+                    # Add source information for comprehensive view
+                    if "source_chunks" in issue:
+                        chunks = issue["source_chunks"]
+                        if chunks and isinstance(chunks, list):
+                            issue_html.append(f'<p class="source-info"><strong>Mentioned in:</strong> {len(chunks)} document sections</p>')
             
             issue_html.append('</div>')  # Close issue-content
             issue_html.append('</div>')  # Close issue-card
@@ -201,137 +442,36 @@ class FormatterAgent(BaseAgent):
         
         return "\n".join(html_parts)
     
-    def _format_actions_report(self, evaluated_result: Dict[str, Any], context) -> str:
-        """
-        Format actions data into a Streamlit-friendly HTML report.
-        
-        Args:
-            evaluated_result: Evaluated actions data
-            context: Processing context
-            
-        Returns:
-            HTML report string
-        """
-        # Extract actions by priority
-        immediate_actions = evaluated_result.get("immediate_actions", [])
-        short_term_actions = evaluated_result.get("short_term_actions", [])
-        long_term_actions = evaluated_result.get("long_term_actions", [])
-        
-        # Get executive summary if available
-        executive_summary = evaluated_result.get("executive_summary", 
-                                                "No executive summary available.")
-        
-        # Build the HTML report
-        html = [
-            f'<div class="actions-report">',
-            f'<h1>Action Items Report</h1>',
-            
-            # Executive Summary section
-            f'<div class="executive-summary">',
-            f'<h2>📋 Executive Summary</h2>',
-            f'<p>{executive_summary}</p>',
-            f'</div>',
-            
-            # Immediate Actions section
-            f'<div class="actions-section">',
-            f'<h2>🔴 Immediate Actions ({len(immediate_actions)})</h2>',
-            self._render_actions_list(immediate_actions, "immediate"),
-            f'</div>',
-            
-            # Short-term Actions section
-            f'<div class="actions-section">',
-            f'<h2>🟠 Short-Term Actions ({len(short_term_actions)})</h2>',
-            self._render_actions_list(short_term_actions, "short-term"),
-            f'</div>',
-            
-            # Long-term Actions section
-            f'<div class="actions-section">',
-            f'<h2>🟢 Long-Term Actions ({len(long_term_actions)})</h2>',
-            self._render_actions_list(long_term_actions, "long-term"),
-            f'</div>',
-            
-            f'</div>'  # Close actions-report div
-        ]
-        
-        return "\n".join(html)
-    
-    def _render_actions_list(self, actions: List[Dict[str, Any]], priority: str) -> str:
-        """
-        Render a list of actions as HTML.
-        
-        Args:
-            actions: List of action dictionaries
-            priority: Priority level (immediate, short-term, long-term)
-            
-        Returns:
-            HTML string for the actions list
-        """
-        if not actions:
-            return "<p>No actions found in this category.</p>"
-        
-        html_parts = []
-        
-        for action in actions:
-            # Extract action details with fallbacks
-            title = action.get("title", "Untitled Action")
-            description = action.get("description", "")
-            owner = action.get("owner", "Unassigned")
-            due_date = action.get("due_date", "")
-            
-            # Build action card
-            action_html = [
-                f'<div class="action-card {priority}">',
-                f'<h3>{title}</h3>',
-                
-                f'<div class="action-meta">',
-                f'<span class="action-owner">{owner}</span>',
-            ]
-            
-            # Add due date if available
-            if due_date:
-                action_html.append(f'<span class="action-due-date">{due_date}</span>')
-            
-            action_html.append('</div>')  # Close action-meta
-            
-            # Action content section
-            action_html.append('<div class="action-content">')
-            action_html.append(f'<p>{description}</p>')
-            action_html.append('</div>')  # Close action-content
-            
-            action_html.append('</div>')  # Close action-card
-            
-            html_parts.append("\n".join(action_html))
-        
-        return "\n".join(html_parts)
-    
     def _format_generic_report(self, evaluated_result: Dict[str, Any], context) -> str:
         """
-        Format generic data into a Streamlit-friendly HTML report.
+        Format generic results into a clean HTML report compatible with dark theme.
         
         Args:
-            evaluated_result: Evaluated data
-            context: Processing context
+            evaluated_result: Evaluated results
+            context: ProcessingContext
             
         Returns:
-            HTML report string
+            HTML report
         """
         # Get executive summary if available
         executive_summary = evaluated_result.get("executive_summary", 
                                                 "No executive summary available.")
         
-        # Get any findings or items
-        items = evaluated_result.get("findings", [])
-        if not items:
-            items = evaluated_result.get("items", [])
-            if not items:
-                # Try to find any list field
-                for key, value in evaluated_result.items():
-                    if isinstance(value, list) and len(value) > 0:
-                        items = value
-                        break
+        # Get items
+        items = []
+        if "findings" in evaluated_result and isinstance(evaluated_result["findings"], list):
+            items = evaluated_result["findings"]
+        elif "items" in evaluated_result and isinstance(evaluated_result["items"], list):
+            items = evaluated_result["items"]
+        elif "evaluated_items" in evaluated_result and isinstance(evaluated_result["evaluated_items"], list):
+            items = evaluated_result["evaluated_items"]
+        
+        # Add CSS for dark theme
+        css = self._get_dark_theme_css()
         
         # Build the HTML report
         html = [
+            f'<style>{css}</style>',
             f'<div class="analysis-report">',
             f'<h1>{self.crew_type.capitalize()} Analysis Report</h1>',
             
@@ -341,9 +481,9 @@ class FormatterAgent(BaseAgent):
             f'<p>{executive_summary}</p>',
             f'</div>',
             
-            # Findings section if available
-            f'<div class="findings-section">',
-            f'<h2>🔍 Key Findings</h2>',
+            # Items section
+            f'<div class="items-section">',
+            f'<h2>🔍 Findings</h2>',
             self._render_generic_items(items),
             f'</div>',
             
@@ -360,7 +500,7 @@ class FormatterAgent(BaseAgent):
             items: List of item dictionaries
             
         Returns:
-            HTML string for the items list
+            HTML for the items list
         """
         if not items:
             return "<p>No findings available.</p>"
@@ -380,9 +520,9 @@ class FormatterAgent(BaseAgent):
                 
                 # Build item card
                 item_html = [
-                    f'<div class="item-card">',
+                    f'<div class="issue-card">',
                     f'<h3>{title}</h3>',
-                    f'<div class="item-content">',
+                    f'<div class="issue-content">',
                     f'<p>{description}</p>',
                     f'</div>',
                     f'</div>'
@@ -391,44 +531,13 @@ class FormatterAgent(BaseAgent):
                 html_parts.append("\n".join(item_html))
             elif isinstance(item, str):
                 # Simple string item
-                html_parts.append(f'<div class="item-card"><p>{item}</p></div>')
+                html_parts.append(f'<div class="issue-card"><p>{item}</p></div>')
         
         return "\n".join(html_parts)
     
-    def _generate_summary_stats(self, evaluated_result: Dict[str, Any]) -> str:
-        """
-        Generate summary statistics section if available.
-        
-        Args:
-            evaluated_result: Evaluated data
-            
-        Returns:
-            HTML string for summary stats section
-        """
-        stats = evaluated_result.get("statistics", {})
-        if not stats:
-            stats = evaluated_result.get("summary_stats", {})
-            if not stats:
-                return ""
-        
-        html = [
-            f'<div class="summary-stats">',
-            f'<h2>📊 Summary Statistics</h2>',
-            f'<ul>'
-        ]
-        
-        for key, value in stats.items():
-            formatted_key = key.replace("_", " ").title()
-            html.append(f'<li><strong>{formatted_key}:</strong> {value}</li>')
-        
-        html.append('</ul>')
-        html.append('</div>')
-        
-        return "\n".join(html)
-    
     def _create_error_report(self, message: str) -> str:
         """
-        Create an error report when formatting fails.
+        Create an error report when formatting fails, compatible with dark theme.
         
         Args:
             message: Error message
@@ -436,11 +545,15 @@ class FormatterAgent(BaseAgent):
         Returns:
             HTML error report
         """
+        # Add CSS for dark theme
+        css = self._get_dark_theme_css()
+        
         html = [
+            f'<style>{css}</style>',
             '<div class="issues-report">',
-            '<h1>Issues Analysis Report</h1>',
+            '<h1>Analysis Report</h1>',
             
-            '<div class="error-message" style="background-color: rgba(255, 82, 82, 0.1); border-left: 4px solid #ff5252; padding: 15px; border-radius: 4px; margin: 20px 0;">',
+            '<div class="error-message">',
             f'<h3>⚠️ Error During Report Generation</h3>',
             f'<p>{message}</p>',
             '<p>Please try again or check the document for potential issues.</p>',
@@ -450,187 +563,3 @@ class FormatterAgent(BaseAgent):
         ]
         
         return "\n".join(html)
-    
-    async def format_report(
-        self, 
-        evaluated_items: Dict[str, Any], 
-        document_info: Optional[Dict[str, Any]] = None, 
-        user_preferences: Optional[Dict[str, Any]] = None
-    ) -> Union[str, Dict[str, Any]]:
-        """
-        Legacy method for backward compatibility.
-        Formats evaluated items into a structured report.
-        
-        Args:
-            evaluated_items: Items to include in the report
-            document_info: Optional document metadata
-            user_preferences: Optional user formatting preferences
-            
-        Returns:
-            Formatted report (HTML string or dictionary)
-        """
-        # Create a minimal context
-        class MinimalContext:
-            def __init__(self):
-                self.results = {}
-                self.document_info = {}
-                self.options = {}
-        
-        context = MinimalContext()
-        context.results["evaluation"] = evaluated_items
-        context.document_info = document_info or {}
-        context.options = user_preferences or {}
-        
-        # Use the new formatting methods
-        if self.crew_type == "issues":
-            return self._format_issues_report(evaluated_items, context)
-        elif self.crew_type == "actions":
-            return self._format_actions_report(evaluated_items, context)
-        else:
-            return self._format_generic_report(evaluated_items, context)
-    
-    def _sanitize_html_content(self, content: str) -> str:
-        """
-        Sanitize HTML content for Streamlit compatibility.
-        
-        Args:
-            content: HTML content to sanitize
-            
-        Returns:
-            Sanitized HTML content
-        """
-        # Remove script tags entirely (Streamlit blocks these)
-        content = re.sub(r'<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>', '', content)
-        
-        # Replace problematic characters
-        content = content.replace('&nbsp;', ' ')
-        
-        # Ensure proper encoding of special characters
-        content = content.replace('&', '&amp;')
-        content = content.replace('<', '&lt;').replace('>', '&gt;')
-        content = content.replace('&lt;div', '<div').replace('&lt;/div&gt;', '</div>')
-        content = content.replace('&lt;h', '<h').replace('&lt;/h', '</h')
-        content = content.replace('&lt;p', '<p').replace('&lt;/p&gt;', '</p>')
-        content = content.replace('&lt;span', '<span').replace('&lt;/span&gt;', '</span>')
-        content = content.replace('&lt;strong', '<strong').replace('&lt;/strong&gt;', '</strong>')
-        content = content.replace('&lt;ul', '<ul').replace('&lt;/ul&gt;', '</ul>')
-        content = content.replace('&lt;li', '<li').replace('&lt;/li&gt;', '</li>')
-        
-        # Ensure we have valid closing tags
-        unclosed_divs = content.count('<div') - content.count('</div>')
-        if unclosed_divs > 0:
-            content += '</div>' * unclosed_divs
-        
-        return content
-    
-    def _get_stage_specific_content(self, context) -> str:
-        """
-        Get stage-specific content for the prompt.
-        
-        Args:
-            context: Processing context
-            
-        Returns:
-            Stage-specific content string
-        """
-        # Handle multiple context types
-        if hasattr(context, 'results'):
-            # Normal processing context
-            evaluated_result = context.results.get("evaluation", {})
-            detail_level = context.options.get("detail_level", "standard") if hasattr(context, "options") else "standard"
-        elif isinstance(context, dict):
-            # Dictionary context
-            evaluated_result = context.get("evaluated_items", {})
-            detail_level = context.get("detail_level", "standard")
-        else:
-            # Unknown context type
-            return ""
-        
-        # Build content based on crew type
-        content_parts = []
-        
-        # Add crew type guidance
-        content_parts.append(f"REPORT TYPE: {self.crew_type}")
-        
-        # Add detail level guidance
-        detail_guidance = self._get_detail_level_guidance(detail_level)
-        content_parts.append(f"DETAIL LEVEL ({detail_level}): {detail_guidance}")
-        
-        # Add crew-specific guidance
-        if self.crew_type == "issues":
-            content_parts.append(self._get_issues_guidance())
-        elif self.crew_type == "actions":
-            content_parts.append(self._get_actions_guidance())
-        
-        return "\n\n".join(content_parts)
-    
-    def _get_detail_level_guidance(self, detail_level: str) -> str:
-        """
-        Get guidance for a specific detail level.
-        
-        Args:
-            detail_level: Detail level (essential, standard, comprehensive)
-            
-        Returns:
-            Guidance string
-        """
-        # Try to get from config
-        user_options = self.config.get("user_options", {})
-        detail_levels = user_options.get("detail_levels", {})
-        
-        if detail_level in detail_levels:
-            return detail_levels[detail_level]
-        
-        # Default guidance
-        defaults = {
-            "essential": "Focus only on the most important elements with minimal detail.",
-            "standard": "Provide a balanced amount of detail, covering all significant aspects.",
-            "comprehensive": "Include thorough details, context, and explanations for all elements."
-        }
-        
-        return defaults.get(detail_level, defaults["standard"])
-    
-    def _get_issues_guidance(self) -> str:
-        """
-        Get guidance specific to issues reports.
-        
-        Returns:
-            Issues guidance string
-        """
-        return """
-ISSUES REPORT STRUCTURE:
-1. Executive Summary - Overall assessment of issues found
-2. Critical Issues - Problems requiring immediate attention
-3. High-Priority Issues - Significant problems that need addressing
-4. Medium-Priority Issues - Moderate problems to be fixed
-5. Low-Priority Issues - Minor issues that should be noted
-
-FORMATTING REQUIREMENTS:
-- Use severity-appropriate styling (critical=red, high=orange, medium=yellow, low=green)
-- Include badges for severity levels
-- For each issue, include title, description, and impact
-- Group similar issues together
-- Ensure consistent formatting across all severity levels
-"""
-    
-    def _get_actions_guidance(self) -> str:
-        """
-        Get guidance specific to actions reports.
-        
-        Returns:
-            Actions guidance string
-        """
-        return """
-ACTIONS REPORT STRUCTURE:
-1. Executive Summary - Overall assessment of actions identified
-2. Immediate Actions - Tasks requiring immediate attention
-3. Short-Term Actions - Tasks to be completed in the near future
-4. Long-Term Actions - Tasks with longer timelines
-
-FORMATTING REQUIREMENTS:
-- Highlight action owners and deadlines
-- For each action, include title, description, owner, and timeline
-- Group related actions together
-- Ensure actions are clear and actionable
-- Add visual priority indicators
-"""

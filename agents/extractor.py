@@ -1,6 +1,6 @@
 """
-Extractor Agent - Specialized in identifying items in document chunks.
-Clean implementation that leverages the new BaseAgent architecture.
+Simplified Extractor Agent for Better Notes.
+Focuses on extracting as many issues as possible with minimal complexity.
 """
 
 import json
@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 class ExtractorAgent(BaseAgent):
     """
-    Agent specialized in extracting specific information from document chunks.
-    Identifies issues and adds initial metadata for each issue.
+    Simplified Extractor agent that focuses on finding as many potential issues as possible.
+    Keeps things simple and ensures all extracted issues have the necessary fields.
     """
     
     def __init__(
@@ -39,10 +39,12 @@ class ExtractorAgent(BaseAgent):
             max_chunk_size=max_chunk_size,
             max_rpm=max_rpm
         )
+        
+        logger.info(f"Simplified ExtractorAgent initialized for {crew_type}")
     
     async def process(self, context):
         """
-        Process chunks using the context.
+        Process chunks using the context with straightforward approach.
         
         Args:
             context: ProcessingContext object
@@ -50,41 +52,77 @@ class ExtractorAgent(BaseAgent):
         Returns:
             Extraction results for all chunks
         """
+        logger.info("ExtractorAgent starting extraction process")
+        
         # Get chunks and metadata from context
         chunks = context.chunks
         chunk_metadata = context.chunk_metadata
         
+        if not chunks:
+            logger.warning("No chunks found in context for extraction")
+            return []
+        
         # Process each chunk
         extraction_results = []
         total_chunks = len(chunks)
+        total_issues_found = 0
+        
+        logger.info(f"Processing {total_chunks} chunks for extraction")
         
         for i, chunk in enumerate(chunks):
             # Get metadata for this chunk
             metadata = chunk_metadata[i] if i < len(chunk_metadata) else {"index": i}
             
-            # Extract from this chunk
-            result = await self.extract_from_chunk(
-                chunk=chunk,
-                document_info=context.document_info,
-                chunk_metadata=metadata
-            )
-            
-            # Add to results
-            extraction_results.append(result)
+            try:
+                # Extract from this chunk
+                result = await self.extract_from_chunk(
+                    chunk=chunk,
+                    document_info=context.document_info,
+                    chunk_metadata=metadata
+                )
+                
+                # Count issues
+                issues_field = self._get_items_field_name()
+                if issues_field in result and isinstance(result[issues_field], list):
+                    issues_found = len(result[issues_field])
+                    total_issues_found += issues_found
+                    logger.info(f"Chunk {i+1}/{total_chunks}: Found {issues_found} issues")
+                
+                # Add to results
+                extraction_results.append(result)
+                
+                logger.info(f"Successfully extracted from chunk {i+1}/{total_chunks}")
+                
+            except Exception as e:
+                # Log error but continue with other chunks
+                logger.error(f"Error extracting from chunk {i+1}/{total_chunks}: {e}")
+                
+                # Add empty result for this chunk
+                extraction_results.append({
+                    "error": str(e),
+                    "chunk_index": i,
+                    self._get_items_field_name(): []  # Empty items list
+                })
             
             # Update progress in context if available
-            if hasattr(context, 'update_progress') and hasattr(context.metadata, 'get'):
+            if hasattr(context, 'update_progress') and callable(getattr(context, 'update_progress', None)):
                 progress_base = 0.22  # Starting point for extraction
                 progress_per_chunk = 0.28 / total_chunks  # 28% of total progress is for extraction
                 progress = progress_base + (i + 1) * progress_per_chunk
                 
-                callback = context.metadata.get('progress_callback')
+                callback = getattr(context.metadata, 'get', lambda x: None)('progress_callback')
                 if callback:
                     context.update_progress(
                         progress,
-                        f"Extracted from chunk {i+1}/{total_chunks}",
+                        f"Extracted from chunk {i+1}/{total_chunks} - Found {total_issues_found} issues so far",
                         callback
                     )
+        
+        logger.info(f"Completed extraction of {total_chunks} chunks, found {total_issues_found} total issues")
+        
+        # Track issue count if context supports it
+        if hasattr(context, 'track_issue_count'):
+            context.track_issue_count('extraction', total_issues_found)
         
         return extraction_results
     
@@ -95,7 +133,7 @@ class ExtractorAgent(BaseAgent):
         chunk_metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Extract information from a document chunk.
+        Extract issues from a document chunk with straightforward approach.
         
         Args:
             chunk: Text chunk to analyze
@@ -111,109 +149,134 @@ class ExtractorAgent(BaseAgent):
         # Create extraction context
         extraction_context = {
             "document_chunk": safe_chunk,
-            "document_info": document_info,
             "chunk_metadata": chunk_metadata or {},
-            "index": chunk_metadata.get("index", 0) if chunk_metadata else 0,
             "position": chunk_metadata.get("position", "unknown") if chunk_metadata else "unknown",
-            "chunk_type": chunk_metadata.get("chunk_type", "unknown") if chunk_metadata else "unknown",
+            "chunk_index": chunk_metadata.get("index", 0) if chunk_metadata else 0
         }
         
         # Execute extraction
         result = await self.execute_task(extraction_context)
         
-        # Enhance result with metadata
-        return self._enhance_result_with_metadata(result, chunk_metadata)
-    
-    def _get_stage_specific_content(self, context) -> str:
-        """Get stage-specific content for the prompt."""
-        if isinstance(context, dict) and "document_chunk" in context:
-            # Add document chunk as the main content
-            content = f"DOCUMENT CHUNK:\n{context['document_chunk']}\n\n"
-            
-            # Add position information if available
-            if "position" in context:
-                position = context["position"]
-                content += f"POSITION IN DOCUMENT: {position}\n"
-                
-                # Add position-specific guidance
-                if position == "introduction":
-                    content += "This is the introduction section. Look for initial mentions of problems or challenges.\n"
-                elif position == "conclusion":
-                    content += "This is the conclusion section. Look for unresolved issues or future considerations.\n"
-            
-            # Add chunk metadata if helpful
-            if "chunk_type" in context:
-                content += f"CHUNK TYPE: {context['chunk_type']}\n"
-            
-            if "index" in context:
-                content += f"CHUNK INDEX: {context['index']}\n"
-            
-            return content
-            
-        return ""
-    
-    def _enhance_result_with_metadata(self, result: Any, chunk_metadata: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Enhance the extraction result with additional metadata.
-        
-        Args:
-            result: The extraction result
-            chunk_metadata: Metadata about the chunk
-            
-        Returns:
-            Enhanced result with metadata
-        """
-        # Handle string results
+        # Parse result if it's a string
         if isinstance(result, str):
             try:
-                # Try to parse as JSON
-                parsed_result = self.parse_llm_json(result)
-                if isinstance(parsed_result, dict):
-                    result = parsed_result
-                else:
-                    # Create basic structure
-                    result = {self._get_items_field_name(): [{"description": result}]}
-            except:
-                # Not valid JSON, create basic structure
-                result = {self._get_items_field_name(): [{"description": result}]}
+                result = self.parse_llm_json(result)
+            except Exception as e:
+                logger.warning(f"Error parsing extraction result: {e}")
+                
+                # Create a basic structure with the text as description
+                issues_field = self._get_items_field_name()
+                return {
+                    issues_field: [{
+                        "title": "Parsing Error",
+                        "description": result[:500] + ("..." if len(result) > 500 else ""),
+                        "severity": "medium",
+                        "category": "technical"
+                    }],
+                    "chunk_index": chunk_metadata.get("index", 0) if chunk_metadata else 0
+                }
         
-        # Handle non-dictionary results
+        # Ensure result is a dictionary
         if not isinstance(result, dict):
-            result = {self._get_items_field_name(): [{"description": str(result)}]}
+            issues_field = self._get_items_field_name()
+            result = {issues_field: []}
         
-        # Ensure items field exists
-        items_field = self._get_items_field_name()
-        if items_field not in result:
-            result[items_field] = []
+        # Ensure issues field exists
+        issues_field = self._get_items_field_name()
+        if issues_field not in result:
+            result[issues_field] = []
         
-        # Add chunk metadata to each item
-        items = result[items_field]
-        if isinstance(items, list):
-            for item in items:
-                if isinstance(item, dict):
-                    # Add chunk index if not present
-                    if "chunk_index" not in item and chunk_metadata:
-                        item["chunk_index"] = chunk_metadata.get("index", 0)
-                    
-                    # Add position context if not present
-                    if "location_context" not in item and chunk_metadata:
-                        position = chunk_metadata.get("position", "unknown")
-                        item["location_context"] = f"{position} section"
-                    
-                    # Add keywords if not present
-                    if "keywords" not in item and "description" in item:
-                        item["keywords"] = self._extract_keywords(item["description"])
+        # Ensure each issue has required fields
+        self._ensure_required_fields(result[issues_field], chunk_metadata)
         
-        # Add extraction metadata
-        result["_metadata"] = {
-            "chunk_index": chunk_metadata.get("index", 0) if chunk_metadata else 0,
-            "position": chunk_metadata.get("position", "unknown") if chunk_metadata else "unknown",
-            "chunk_type": chunk_metadata.get("chunk_type", "unknown") if chunk_metadata else "unknown",
-            "item_count": len(items) if isinstance(items, list) else 0,
-            "timestamp": datetime.now().isoformat()
-        }
+        # Add chunk metadata
+        result["chunk_index"] = chunk_metadata.get("index", 0) if chunk_metadata else 0
+        result["position"] = chunk_metadata.get("position", "unknown") if chunk_metadata else "unknown"
         
         return result
+    
+    def _get_stage_specific_content(self, context) -> str:
+        """
+        Get stage-specific content for the prompt.
+        
+        Args:
+            context: Extraction context
+            
+        Returns:
+            Stage-specific content string
+        """
+        if isinstance(context, dict) and "document_chunk" in context:
+            # Add document chunk as the main content
+            content = f"""
+DOCUMENT CHUNK TO ANALYZE:
+{context['document_chunk']}
+
+YOUR TASK:
+Extract ALL potential issues, problems, challenges, risks, or concerns from this document chunk.
+Be thorough and comprehensive - it's better to identify too many issues than to miss important ones.
+
+For each issue you identify, provide:
+1. A clear, concise title
+2. A detailed description of the issue
+3. A severity assessment (critical, high, medium, or low)
+4. The best category that fits from: technical, process, resource, quality, risk, compliance
+
+CHUNK CONTEXT:
+Position in document: {context.get('position', 'unknown')}
+Chunk index: {context.get('chunk_index', 0)}
+
+IMPORTANT GUIDELINES:
+- Be comprehensive - identify as many issues as possible
+- Include issues that are explicitly mentioned AND those that are implied
+- Prioritize concrete, specific issues over vague or general concerns
+- Consider perspectives of different stakeholders (customers, employees, management)
+- Look for risks, challenges, bottlenecks, inefficiencies, and problems
+- Don't filter out issues you think might be unimportant - include everything
+- Ensure every issue has a title and description at minimum
+
+OUTPUT FORMAT:
+Provide a JSON object with an "issues" array containing all identified issues.
+Each issue should have: title, description, severity, and category fields.
+"""
+            return content
+        
+        return ""
+    
+    def _ensure_required_fields(self, issues: List[Dict[str, Any]], chunk_metadata: Optional[Dict[str, Any]] = None) -> None:
+        """
+        Ensure all issues have the required fields, adding defaults if missing.
+        
+        Args:
+            issues: List of issues to check
+            chunk_metadata: Metadata about the chunk
+        """
+        if not isinstance(issues, list):
+            return
+        
+        for i, issue in enumerate(issues):
+            if not isinstance(issue, dict):
+                continue
+            
+            # Ensure title exists
+            if "title" not in issue or not issue["title"]:
+                issue["title"] = f"Untitled Issue {i+1}"
+            
+            # Ensure description exists
+            if "description" not in issue or not issue["description"]:
+                issue["description"] = issue.get("title", "No description provided")
+            
+            # Ensure severity exists
+            if "severity" not in issue or not issue["severity"]:
+                issue["severity"] = "medium"
+            
+            # Ensure category exists
+            if "category" not in issue or not issue["category"]:
+                issue["category"] = self._infer_category(issue.get("description", ""), issue.get("title", ""))
+            
+            # Add chunk metadata
+            if chunk_metadata:
+                issue["chunk_index"] = chunk_metadata.get("index", 0)
+                issue["location_context"] = f"{chunk_metadata.get('position', 'unknown')} section"
     
     def _get_items_field_name(self) -> str:
         """
@@ -227,36 +290,55 @@ class ExtractorAgent(BaseAgent):
             "issues": "issues",
             "actions": "action_items",
             "opportunities": "opportunities",
-            "risks": "risks"
+            "risks": "risks",
+            "insights": "insights"
         }
         
         return field_map.get(self.crew_type, f"{self.crew_type}_items")
     
-    def _extract_keywords(self, text: str, max_keywords: int = 5) -> List[str]:
+    def _infer_category(self, description: str, title: str = "") -> str:
         """
-        Extract key keywords from text.
+        Infer a category for an issue based on its description and title.
+        Simplified version that uses basic keyword matching.
         
         Args:
-            text: Text to analyze
-            max_keywords: Maximum number of keywords to extract
+            description: Issue description
+            title: Issue title
             
         Returns:
-            List of keywords
+            Inferred category
         """
-        # Simple keyword extraction implementation
-        import re
-        from collections import Counter
+        if self.crew_type != "issues":
+            return ""
+            
+        # Get available categories from config
+        available_categories = []
+        if "issue_definition" in self.config and "categories" in self.config["issue_definition"]:
+            available_categories = self.config["issue_definition"]["categories"]
         
-        # Tokenize and clean
-        words = re.findall(r'\b[a-zA-Z]{3,}\b', text.lower())
+        # Default categories if not in config
+        if not available_categories:
+            available_categories = ["technical", "process", "resource", "quality", "risk", "compliance"]
         
-        # Remove common stopwords
-        stopwords = {"the", "and", "to", "of", "a", "in", "that", "it", "with", 
-                    "for", "on", "is", "was", "be", "this", "are", "as", "but"}
-        filtered_words = [word for word in words if word not in stopwords]
+        # Combine text for analysis
+        text = (title + " " + description).lower()
         
-        # Count frequencies
-        word_counts = Counter(filtered_words)
+        # Simple keyword mapping to categories
+        category_keywords = {
+            "technical": ["technical", "technology", "system", "software", "hardware", "infrastructure", "bug"],
+            "process": ["process", "procedure", "workflow", "approach", "steps", "method"],
+            "resource": ["resource", "budget", "cost", "funding", "staff", "personnel", "time", "money"],
+            "quality": ["quality", "standard", "performance", "metric", "test"],
+            "risk": ["risk", "threat", "danger", "security", "mitigation"],
+            "compliance": ["compliance", "regulation", "requirement", "legal", "law", "rule"]
+        }
         
-        # Get most common words
-        return [word for word, _ in word_counts.most_common(max_keywords)]
+        # Check each category
+        for category, keywords in category_keywords.items():
+            if category in available_categories:
+                for keyword in keywords:
+                    if keyword in text:
+                        return category
+        
+        # Default to the first available category
+        return available_categories[0] if available_categories else "general"

@@ -1,10 +1,11 @@
 """
-Aggregator Agent - Specialized in combining and deduplicating extraction results.
-Clean implementation that leverages the new BaseAgent architecture.
+Simple Aggregator Agent for Better Notes that deduplicates and combines extraction results.
+Focuses on letting the LLM do the heavy lifting for combining similar items.
 """
 
 import json
 import logging
+import traceback
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
@@ -14,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 class AggregatorAgent(BaseAgent):
     """
-    Agent specialized in combining and deduplicating extraction results from multiple chunks.
-    Enhances metadata during the aggregation process.
+    Simplified Aggregator agent that combines and deduplicates extraction results.
+    Lets the LLM handle most of the aggregation logic for reliable results.
     """
     
     def __init__(
@@ -39,6 +40,8 @@ class AggregatorAgent(BaseAgent):
             max_chunk_size=max_chunk_size,
             max_rpm=max_rpm
         )
+        
+        logger.info(f"AggregatorAgent initialized for {crew_type}")
     
     async def process(self, context):
         """
@@ -50,16 +53,31 @@ class AggregatorAgent(BaseAgent):
         Returns:
             Aggregated results
         """
-        # Get extraction results from context
-        extraction_results = context.results.get("extraction", [])
+        logger.info("AggregatorAgent starting aggregation process")
         
-        # Aggregate results
-        aggregated_result = await self.aggregate_results(
-            extraction_results=extraction_results,
-            document_info=context.document_info
-        )
-        
-        return aggregated_result
+        try:
+            # Get extraction results from context
+            extraction_results = context.results.get("extraction", [])
+            
+            if not extraction_results:
+                logger.warning("No extraction results found in context for aggregation")
+                return self._create_empty_result()
+            
+            # Aggregate results
+            aggregated_result = await self.aggregate_results(
+                extraction_results=extraction_results,
+                document_info=getattr(context, 'document_info', {})
+            )
+            
+            logger.info(f"Successfully aggregated results from {len(extraction_results)} extraction results")
+            return aggregated_result
+            
+        except Exception as e:
+            logger.error(f"Error in aggregation process: {e}")
+            logger.error(traceback.format_exc())
+            
+            # Return empty result in case of error
+            return self._create_empty_result()
     
     async def aggregate_results(
         self, 
@@ -84,14 +102,35 @@ class AggregatorAgent(BaseAgent):
             "items_found": self._count_total_items(extraction_results)
         }
         
-        # Execute aggregation
-        result = await self.execute_task(aggregation_context)
-        
-        # Enhance result with metadata
-        return self._enhance_result_with_metadata(result, extraction_results)
+        # Execute aggregation with the LLM doing most of the work
+        try:
+            result = await self.execute_task(aggregation_context)
+            
+            # Enhance result with metadata
+            enhanced_result = self._enhance_result_with_metadata(result, extraction_results)
+            
+            # Validate result structure
+            validated_result = self._validate_aggregation_result(enhanced_result)
+            
+            return validated_result
+            
+        except Exception as e:
+            logger.error(f"Error in aggregate_results: {e}")
+            logger.error(traceback.format_exc())
+            
+            # Create a simple aggregation of items in case of error
+            return self._create_fallback_aggregation(extraction_results)
     
     def _get_stage_specific_content(self, context) -> str:
-        """Get stage-specific content for the prompt."""
+        """
+        Get stage-specific content for the prompt with focus on effective aggregation.
+        
+        Args:
+            context: Aggregation context
+            
+        Returns:
+            Stage-specific content string
+        """
         if isinstance(context, dict) and "extraction_results" in context:
             # Add statistics about extraction
             content = f"""
@@ -99,23 +138,120 @@ class AggregatorAgent(BaseAgent):
             - Total chunks processed: {context.get('total_chunks', 0)}
             - Total items found: {context.get('items_found', 0)}
             
-            EXTRACTION RESULTS:
+            AGGREGATION TASK:
+            1. Combine similar items from different chunks into single comprehensive items
+            2. Remove exact duplicates
+            3. Preserve important variations and details when merging similar items
+            4. Keep unique items even if they only appear in one chunk
+            5. If an item appears in multiple chunks, combine the contexts from each occurrence
+            
+            Your primary goal is to eliminate redundancy while preserving all unique information.
             """
             
             # Add extraction results in a formatted way
             results = context.get("extraction_results", [])
             
-            # Limit the detail to avoid token overload
-            results_summary = json.dumps(results, indent=2)
-            if len(results_summary) > 3000:
-                # Truncate and add indication
-                results_summary = results_summary[:3000] + "\n...(truncated for brevity)..."
+            # Convert results to a more LLM-friendly format
+            simplified_results = self._simplify_results_for_llm(results)
             
-            content += results_summary
+            # Add simplified results to the prompt
+            content += "\n\nEXTRACTION RESULTS:\n"
+            content += simplified_results
+            
+            # Add specific output format guidance
+            content += f"\n\nOUTPUT FORMAT:\nReturn the aggregated {self.crew_type} as a JSON array under the key '{self._get_output_field_name()}'."
+            content += "\nEach item should preserve all relevant fields from the input items, combining similar information."
+            
+            if self.crew_type == "issues":
+                content += "\n\nFor issues specifically, combine similar issues into a single comprehensive issue with:"
+                content += "\n- A clear title that captures the essence of the issue"
+                content += "\n- A detailed description that combines information from all mentions"
+                content += "\n- The highest severity level from any of the merged issues"
+                content += "\n- The most appropriate category based on the combined information"
+                content += "\n- Source information showing which chunks the issue appeared in"
             
             return content
             
         return ""
+    
+    def _simplify_results_for_llm(self, results: List[Dict[str, Any]]) -> str:
+        """
+        Simplify extraction results into a more concise format for the LLM.
+        
+        Args:
+            results: Extraction results
+            
+        Returns:
+            Simplified results as a string
+        """
+        items_field = self._get_input_field_name()
+        all_items = []
+        
+        # Collect all items from all chunks with chunk identifiers
+        for i, result in enumerate(results):
+            if not isinstance(result, dict):
+                continue
+                
+            # Skip error results
+            if "error" in result and not items_field in result:
+                continue
+                
+            # Get items from this chunk
+            chunk_items = result.get(items_field, [])
+            if not chunk_items:
+                continue
+                
+            # Get chunk metadata
+            chunk_index = result.get("_metadata", {}).get("chunk_index", i)
+            chunk_position = result.get("_metadata", {}).get("position", "unknown")
+            
+            # Add each item with chunk identifier
+            for item in chunk_items:
+                if not isinstance(item, dict):
+                    continue
+                    
+                # Add chunk information to the item
+                item_with_chunk = {
+                    "chunk_index": chunk_index,
+                    "chunk_position": chunk_position
+                }
+                
+                # Copy relevant fields
+                for field in ["title", "description", "severity", "category"]:
+                    if field in item:
+                        item_with_chunk[field] = item[field]
+                
+                all_items.append(item_with_chunk)
+        
+        # Organize items in a format that's easy for the LLM to process
+        if len(all_items) <= 15:
+            # For a small number of items, include everything in full detail
+            return json.dumps(all_items, indent=2)
+        else:
+            # For a larger number of items, create a more compact format
+            compact_items = []
+            
+            for item in all_items:
+                compact_item = {
+                    "chunk": f"{item.get('chunk_index', 0)} ({item.get('chunk_position', 'unknown')})",
+                    "title": item.get("title", "Untitled"),
+                }
+                
+                # Add other fields if they're not too long
+                desc = item.get("description", "")
+                if len(desc) > 100:
+                    desc = desc[:97] + "..."
+                compact_item["desc"] = desc
+                
+                if "severity" in item:
+                    compact_item["sev"] = item["severity"]
+                    
+                if "category" in item:
+                    compact_item["cat"] = item["category"]
+                
+                compact_items.append(compact_item)
+            
+            return json.dumps(compact_items, indent=1)
     
     def _preprocess_extraction_results(self, extraction_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -132,13 +268,13 @@ class AggregatorAgent(BaseAgent):
         
         for i, result in enumerate(extraction_results):
             # Skip error results
-            if isinstance(result, dict) and "error" in result:
+            if isinstance(result, dict) and "error" in result and not items_field in result:
                 continue
             
             # Extract items from the result
             if isinstance(result, dict) and items_field in result:
                 items = result[items_field]
-                if isinstance(items, list):
+                if isinstance(items, list) and items:
                     chunk_info = {
                         "chunk_index": result.get("_metadata", {}).get("chunk_index", i),
                         "position": result.get("_metadata", {}).get("position", "unknown"),
@@ -180,7 +316,7 @@ class AggregatorAgent(BaseAgent):
         Returns:
             Enhanced result with metadata
         """
-        # Ensure result is a dictionary
+        # Parse the result if it's a string
         if isinstance(result, str):
             try:
                 # Try to parse as JSON
@@ -189,26 +325,27 @@ class AggregatorAgent(BaseAgent):
                     result = parsed_result
                 else:
                     # Create basic structure
-                    result = {self._get_output_field_name(): [{"description": result}]}
-            except:
+                    result = {self._get_output_field_name(): []}
+            except Exception as e:
+                logger.error(f"Error parsing result: {e}")
                 # Not valid JSON, create basic structure
-                result = {self._get_output_field_name(): [{"description": result}]}
+                result = {self._get_output_field_name(): []}
         
-        # Handle non-dictionary results
+        # If result is still not a dictionary, create basic structure
         if not isinstance(result, dict):
-            result = {self._get_output_field_name(): [{"description": str(result)}]}
+            result = {self._get_output_field_name(): []}
         
         # Ensure output field exists
         output_field = self._get_output_field_name()
         if output_field not in result:
             result[output_field] = []
         
-        # Add mention counts and source chunks
+        # Add source chunks and mention counts if not present
         items = result[output_field]
         if isinstance(items, list):
             for item in items:
                 if isinstance(item, dict):
-                    # Calculate source info if not present
+                    # Find source chunks if not already present
                     if "source_chunks" not in item:
                         item["source_chunks"] = self._find_source_chunks(item, extraction_results)
                     
@@ -216,7 +353,7 @@ class AggregatorAgent(BaseAgent):
                     if "mention_count" not in item and "source_chunks" in item:
                         item["mention_count"] = len(item["source_chunks"])
                     
-                    # Add confidence score if not present
+                    # Add confidence based on mention count
                     if "confidence" not in item and "mention_count" in item:
                         item["confidence"] = self._calculate_confidence(item["mention_count"])
         
@@ -231,6 +368,176 @@ class AggregatorAgent(BaseAgent):
             "chunks_processed": len(extraction_results),
             "timestamp": datetime.now().isoformat()
         }
+        
+        return result
+    
+    def _validate_aggregation_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Validate the structure of the aggregation result and fix any issues.
+        
+        Args:
+            result: The aggregation result to validate
+            
+        Returns:
+            Validated result
+        """
+        output_field = self._get_output_field_name()
+        
+        # Ensure result is a dictionary
+        if not isinstance(result, dict):
+            logger.warning(f"Aggregation result is not a dictionary: {type(result)}")
+            return {
+                output_field: [],
+                "_metadata": {
+                    "input_count": 0,
+                    "output_count": 0,
+                    "deduplication_rate": 0,
+                    "chunks_processed": 0,
+                    "error": "Invalid result format"
+                }
+            }
+        
+        # Ensure output field exists and is a list
+        if output_field not in result or not isinstance(result[output_field], list):
+            logger.warning(f"Output field missing or not a list: {output_field}")
+            result[output_field] = []
+        
+        # Validate each item
+        valid_items = []
+        for item in result[output_field]:
+            if not isinstance(item, dict):
+                logger.warning(f"Item is not a dictionary: {item}")
+                continue
+                
+            # For issues analysis, ensure minimum required fields
+            if self.crew_type == "issues":
+                # Ensure title exists
+                if "title" not in item or not item["title"]:
+                    if "description" in item:
+                        # Generate title from description
+                        item["title"] = self._generate_title(item["description"])
+                    else:
+                        logger.warning(f"Item missing both title and description")
+                        continue
+                
+                # Ensure description exists
+                if "description" not in item or not item["description"]:
+                    if "title" in item:
+                        item["description"] = item["title"]
+                    else:
+                        logger.warning(f"Item missing both title and description")
+                        continue
+            
+            valid_items.append(item)
+        
+        # Replace items with validated list
+        result[output_field] = valid_items
+        
+        # Update item count in metadata
+        if "_metadata" in result:
+            result["_metadata"]["output_count"] = len(valid_items)
+        
+        return result
+    
+    def _create_empty_result(self) -> Dict[str, Any]:
+        """
+        Create an empty result when no extraction results are available.
+        
+        Returns:
+            Empty result structure
+        """
+        return {
+            self._get_output_field_name(): [],
+            "_metadata": {
+                "input_count": 0,
+                "output_count": 0,
+                "deduplication_rate": 0,
+                "chunks_processed": 0,
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+    
+    def _create_fallback_aggregation(self, extraction_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Create a simple aggregation when LLM-based aggregation fails.
+        
+        Args:
+            extraction_results: List of extraction results
+            
+        Returns:
+            Simple aggregated result
+        """
+        logger.info("Creating fallback aggregation")
+        
+        # Initialize result
+        result = {
+            self._get_output_field_name(): [],
+            "_metadata": {
+                "input_count": 0,
+                "output_count": 0,
+                "deduplication_rate": 0,
+                "chunks_processed": len(extraction_results),
+                "fallback": True,
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+        
+        # Get all items
+        input_field = self._get_input_field_name()
+        all_items = []
+        title_map = {}  # For simple deduplication by title
+        
+        for i, extraction in enumerate(extraction_results):
+            if not isinstance(extraction, dict) or input_field not in extraction:
+                continue
+                
+            items = extraction.get(input_field, [])
+            if not isinstance(items, list):
+                continue
+                
+            chunk_index = extraction.get("_metadata", {}).get("chunk_index", i)
+            
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                    
+                # Skip items without title or description
+                if ("title" not in item or not item["title"]) and ("description" not in item or not item["description"]):
+                    continue
+                
+                # Generate title if missing
+                if "title" not in item or not item["title"]:
+                    if "description" in item:
+                        item["title"] = self._generate_title(item["description"])
+                    else:
+                        continue
+                
+                # Simple deduplication by title
+                title = item["title"].lower()
+                if title in title_map:
+                    # We already have an item with this title, update source chunks
+                    existing_item = title_map[title]
+                    if "source_chunks" not in existing_item:
+                        existing_item["source_chunks"] = [chunk_index]
+                    elif chunk_index not in existing_item["source_chunks"]:
+                        existing_item["source_chunks"].append(chunk_index)
+                else:
+                    # New item, add to our collection
+                    item_copy = item.copy()
+                    item_copy["source_chunks"] = [chunk_index]
+                    all_items.append(item_copy)
+                    title_map[title] = item_copy
+        
+        # Update result
+        result[self._get_output_field_name()] = all_items
+        result["_metadata"]["input_count"] = self._count_total_items(extraction_results)
+        result["_metadata"]["output_count"] = len(all_items)
+        
+        # Calculate deduplication rate
+        input_count = result["_metadata"]["input_count"]
+        output_count = result["_metadata"]["output_count"]
+        if input_count > 0:
+            result["_metadata"]["deduplication_rate"] = round((input_count - output_count) / input_count * 100)
         
         return result
     
@@ -250,17 +557,17 @@ class AggregatorAgent(BaseAgent):
         description = item.get("description", "").lower()
         
         source_chunks = []
-        items_field = self._get_input_field_name()
+        input_field = self._get_input_field_name()
         
         for result in extraction_results:
-            if not isinstance(result, dict) or items_field not in result:
+            if not isinstance(result, dict) or input_field not in result:
                 continue
                 
             chunk_index = result.get("_metadata", {}).get("chunk_index", -1)
             if chunk_index == -1:
                 continue
                 
-            extracted_items = result[items_field]
+            extracted_items = result.get(input_field, [])
             if not isinstance(extracted_items, list):
                 continue
             
@@ -284,7 +591,7 @@ class AggregatorAgent(BaseAgent):
         
         return source_chunks
     
-    def _have_significant_overlap(self, text1: str, text2: str, threshold: float = 0.5) -> bool:
+    def _have_significant_overlap(self, text1: str, text2: str, threshold: float = 0.3) -> bool:
         """
         Check if two texts have significant word overlap.
         
@@ -335,7 +642,8 @@ class AggregatorAgent(BaseAgent):
             "issues": "issues",
             "actions": "action_items",
             "opportunities": "opportunities",
-            "risks": "risks"
+            "risks": "risks",
+            "insights": "insights"
         }
         
         return field_map.get(self.crew_type, f"{self.crew_type}_items")
@@ -349,3 +657,33 @@ class AggregatorAgent(BaseAgent):
         """
         input_field = self._get_input_field_name()
         return f"aggregated_{input_field}"
+    
+    def _generate_title(self, description: str, max_length: int = 50) -> str:
+        """
+        Generate a title from a description if one wasn't provided.
+        
+        Args:
+            description: Item description
+            max_length: Maximum title length
+            
+        Returns:
+            Generated title
+        """
+        if not description:
+            return "Untitled Item"
+            
+        # Try to extract the first sentence
+        import re
+        first_sentence_match = re.match(r'^([^.!?]+[.!?])', description)
+        
+        if first_sentence_match:
+            title = first_sentence_match.group(1).strip()
+        else:
+            # Just use the first part of the description
+            title = description.strip()
+        
+        # Truncate if needed
+        if len(title) > max_length:
+            title = title[:max_length].strip() + "..."
+            
+        return title

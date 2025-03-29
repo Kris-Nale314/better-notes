@@ -7,7 +7,7 @@
 
 ## 🚀 Introduction
 
-Better Notes represents a significant advancement over traditional document analysis tools by implementing a sophisticated multi-agent architecture. Rather than using a single large language model or simple RAG approach, Better Notes employs a team of specialized AI agents that collaborate to transform documents into structured, actionable insights.
+Better Notes represents an advancement over traditional document analysis tools by implementing a sophisticated multi-agent architecture. Rather than using a single large language model or simple RAG approach, Better Notes employs a team of specialized AI agents that collaborate to transform documents into structured, actionable insights.
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/kris-nale314/better-notes/main/docs/images/logic.svg" alt="Better-Notes Logic" width="90%"/>

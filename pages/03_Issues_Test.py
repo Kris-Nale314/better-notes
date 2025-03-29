@@ -1,83 +1,48 @@
 """
-New Issues Analysis Test - Better Notes
-Test page for the new Issues Crew implementation with clean architecture.
+03_Issues_Test.py - Test script for the new LangChain Issues Analysis Pipeline.
+Provides a simple Streamlit interface to test the new architecture.
 """
 
 import os
 import sys
 import time
-import logging
 import json
-import traceback
+import logging
 from pathlib import Path
 import tempfile
-from typing import Dict, Any, Optional, List, Union
 
 import streamlit as st
-import asyncio
 
-# Import core components
-from orchestrator import Orchestrator, ProcessingContext
-from orchestrator_factory import OrchestratorFactory
-from config_manager import ConfigManager
+# Add parent directory to path to import from project root
+sys.path.append(str(Path(__file__).parent.parent))
 
-# Import UI utilities
-from ui_utils.core_styling import apply_component_styles, apply_analysis_styles
-from ui_utils.result_formatting import enhance_result_display, create_download_button
-from ui_utils.chat_interface import display_chat_interface
-from ui_utils.progress_tracking import create_progress_callback
+# Import the LangChain Issues Analyzer
+from crews.langchain_issues_analysis import LangChainIssuesAnalyzer
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler("new_issues_test.log", mode="a")
-    ]
+    handlers=[logging.StreamHandler(sys.stdout)]
 )
-logger = logging.getLogger("new_issues_test")
+logger = logging.getLogger("issues_test")
 
 # Configure page
 st.set_page_config(
-    page_title="New Issues Analysis - Better Notes",
-    page_icon="🚀",
+    page_title="Issues Analysis Test",
+    page_icon="🧪",
     layout="wide"
 )
 
-# Apply styling
-apply_component_styles()
-apply_analysis_styles("issues")
-
-# Setup output directory
-OUTPUT_DIR = Path("outputs")
-OUTPUT_DIR.mkdir(exist_ok=True)
-(OUTPUT_DIR / "new_issues_test").mkdir(exist_ok=True)
-
-# Initialize session state
-if "processing_complete" not in st.session_state:
-    st.session_state.processing_complete = False
-if "agent_result" not in st.session_state:
-    st.session_state.agent_result = None
-if "processing_time" not in st.session_state:
-    st.session_state.processing_time = 0
-if "document_info" not in st.session_state:
-    st.session_state.document_info = None
-if "document_text" not in st.session_state:
-    st.session_state.document_text = ""
-if "llm_client" not in st.session_state:
-    st.session_state.llm_client = None
-
-# Main title and description
-st.title("🚀 New Issues Analysis")
+# Title and description
+st.title("🧪 Issues Analysis Test")
 st.markdown("""
-This page demonstrates the new Issues Crew architecture with streamlined agents.
-It identifies problems, challenges, risks, and concerns in your documents using a team
-of specialized AI agents that work together more efficiently.
+This page allows you to test the new LangChain Issues Analysis pipeline with improved agents.
+Upload a document or paste text to analyze it for issues, problems, and risks.
 """)
 
 # Sidebar configuration
-st.sidebar.header("Analysis Settings")
+st.sidebar.header("Test Configuration")
 
 # Model selection
 model_options = ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo"]
@@ -89,6 +54,15 @@ detail_level = st.sidebar.select_slider(
     options=["Essential", "Standard", "Comprehensive"],
     value="Standard",
     help="Controls the depth of analysis"
+)
+
+# Focus areas
+focus_options = ["Technical", "Process", "Resource", "Quality", "Risk", "Compliance"]
+focus_areas = st.sidebar.multiselect(
+    "Focus Areas",
+    options=focus_options,
+    default=[],
+    help="Select specific types of issues to focus on"
 )
 
 # Temperature
@@ -112,21 +86,6 @@ with st.sidebar.expander("Advanced Settings"):
         help="Number of sections to divide document into"
     )
     
-    max_rpm = st.slider(
-        "Max Requests Per Minute",
-        min_value=5,
-        max_value=30,
-        value=10,
-        step=1,
-        help="Controls API request rate"
-    )
-    
-    show_agent_details = st.checkbox(
-        "Show Agent Interactions", 
-        value=False,
-        help="Display detailed agent activity logs"
-    )
-    
     enable_reviewer = st.checkbox(
         "Enable Review Step", 
         value=True,
@@ -139,13 +98,13 @@ with st.sidebar.expander("Advanced Settings"):
         help="Show raw outputs and intermediate results for troubleshooting"
     )
 
-# Document upload
-st.header("Upload Document")
-upload_tab, paste_tab = st.tabs(["Upload File", "Paste Text"])
+# Document input
+st.header("Document Input")
+input_tabs = st.tabs(["Upload File", "Paste Text", "Sample Document"])
 
-document_text = st.session_state.document_text
+document_text = ""
 
-with upload_tab:
+with input_tabs[0]:
     uploaded_file = st.file_uploader("Upload a text document", type=["txt", "md"])
     if uploaded_file:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tmp_file:
@@ -157,8 +116,6 @@ with upload_tab:
                 document_text = f.read()
             
             st.success(f"File loaded: {uploaded_file.name}")
-            st.session_state.document_text = document_text
-            
             with st.expander("Document Preview"):
                 st.text_area(
                     "Content",
@@ -175,21 +132,57 @@ with upload_tab:
             except:
                 pass
 
-with paste_tab:
+with input_tabs[1]:
     pasted_text = st.text_area(
         "Paste document text here",
-        height=200,
+        height=300,
         placeholder="Paste your document text here..."
     )
     if pasted_text:
         document_text = pasted_text
-        st.session_state.document_text = document_text
         st.success(f"Text loaded: {len(document_text)} characters")
 
-# Show document length and chunk size
-if document_text:
-    estimated_chunk_size = len(document_text) // num_chunks
-    st.info(f"Document length: {len(document_text)} characters. With {num_chunks} chunks, each chunk will be approximately {estimated_chunk_size} characters.")
+with input_tabs[2]:
+    st.markdown("### Sample Document")
+    st.markdown("Use this pre-loaded sample document to test the analysis pipeline.")
+    
+    sample_document = """
+    Project Status Report: Database Migration Project
+    
+    Current Status: At Risk
+    
+    Executive Summary:
+    The database migration project is currently behind schedule due to several technical challenges and resource constraints. The original timeline estimated completion by November 15, but current projections indicate a delay of at least 3 weeks.
+    
+    Key Issues:
+    1. Technical Challenges: The legacy database structure has more inconsistencies than initially documented, requiring additional cleansing scripts.
+    2. Resource Constraints: The DBA team is currently understaffed, with two key members being pulled into other critical projects.
+    3. Integration Testing Failures: Initial testing revealed compatibility issues with three downstream systems that weren't identified in the planning phase.
+    4. Budget Concerns: Additional licensing costs for the migration tools were not accounted for in the initial budget, creating a projected overage of $45,000.
+    
+    Mitigation Plans:
+    - Requesting additional DBA resources from the enterprise pool
+    - Developing workarounds for the integration issues with downstream systems
+    - Evaluating alternative migration tools with lower licensing costs
+    
+    Next Steps:
+    1. Meeting with steering committee to approve revised timeline
+    2. Finalizing resource reallocation plan
+    3. Completing comprehensive testing plan for downstream systems
+    
+    Please provide feedback on the proposed mitigation strategies by Friday.
+    """
+    
+    st.text_area(
+        "Sample document",
+        sample_document,
+        height=300,
+        disabled=False  # Allow editing to customize the sample
+    )
+    
+    if st.button("Use Sample Document"):
+        document_text = sample_document
+        st.success("Sample document loaded")
 
 # Custom instructions
 with st.expander("Custom Instructions (Optional)", expanded=False):
@@ -198,491 +191,243 @@ with st.expander("Custom Instructions (Optional)", expanded=False):
         placeholder="E.g., 'Focus on technical issues', 'Prioritize security risks', 'Look for budget concerns'",
         help="Your instructions will guide how the agents analyze the document."
     )
-    
-    # Focus areas
-    focus_areas = st.multiselect(
-        "Focus Areas",
-        options=["Technical", "Process", "Resource", "Quality", "Risk"],
-        default=[],
-        help="Select specific types of issues to emphasize in the analysis"
-    )
 
 # Process button
-process_button = st.button(
-    "Identify Issues", 
-    disabled=not document_text,
-    type="primary",
-    use_container_width=True
-)
+process_col1, process_col2 = st.columns([1, 1])
+with process_col1:
+    process_button = st.button(
+        "Analyze Document", 
+        disabled=not document_text,
+        type="primary",
+        use_container_width=True
+    )
 
-# Function to save output to file
-def save_output_to_file(content: Any) -> str:
-    """
-    Save analysis output to the outputs folder with a timestamp.
-    Handles different content types.
-    
-    Args:
-        content: Content to save (string, dict, or other)
-        
-    Returns:
-        Path to saved file
-    """
-    # Determine if content is HTML or JSON
-    if isinstance(content, str) and ("<html" in content.lower() or "<div" in content.lower()):
-        # HTML content
-        content_str = content
-        file_ext = "html"
-    elif isinstance(content, dict):
-        # JSON content
-        try:
-            content_str = json.dumps(content, indent=2)
-            file_ext = "json"
-        except:
-            content_str = str(content)
-            file_ext = "txt"
+with process_col2:
+    if debug_mode:
+        architecture = st.radio(
+            "Architecture",
+            ["LangChain", "Original CrewAI (for comparison)"],
+            horizontal=True,
+            help="Select which implementation to use"
+        )
     else:
-        # Other content
-        content_str = str(content)
-        file_ext = "txt"
-    
-    # Generate filename with timestamp
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
-    filename = f"new_issues_{timestamp}.{file_ext}"
-    filepath = OUTPUT_DIR / "new_issues_test" / filename
-    
-    # Save to file
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(content_str)
-    
-    return str(filepath)
+        architecture = "LangChain"
 
-# Function to process document
-def process_document():
-    """Process the document with the new implementation."""
+# Function to display progress
+def progress_callback(progress, message):
+    progress_bar.progress(progress)
+    status_text.text(message)
+    
+    # Add to log if debug mode is enabled
+    if debug_mode:
+        with st.session_state.log_lock:
+            st.session_state.logs.append(f"[{progress:.1%}] {message}")
+            log_text = "\n".join(st.session_state.logs[-20:])  # Keep last 20 logs
+            debug_log.text_area("Processing Log", log_text, height=200)
+
+# Initialize session state for logs
+if 'logs' not in st.session_state:
+    st.session_state.logs = []
+    st.session_state.log_lock = False  # Simple lock
+
+# Process document
+if process_button:
+    # Create progress containers
+    st.header("Processing")
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    # Debug log
+    if debug_mode:
+        debug_log = st.empty()
+        st.session_state.log_lock = False
+        st.session_state.logs = ["Starting analysis..."]
+    
     # Check API key
     api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
         st.error("OpenAI API key not found! Please set the OPENAI_API_KEY environment variable.")
-        return
-    
-    logger.info(f"Starting issues analysis with model: {selected_model}")
-    
-    # Create progress placeholders
-    progress_container = st.container()
-    progress_placeholder = progress_container.empty()
-    status_text_placeholder = progress_container.empty()
-    
-    # Create stage indicators using columns and placeholders
-    stages = ["Planning", "Extraction", "Aggregation", "Evaluation", "Formatting"]
-    if enable_reviewer:
-        stages.append("Review")
-    
-    stage_cols = st.columns(len(stages))
-    stage_indicators = []
-    
-    for i, stage in enumerate(stages):
-        with stage_cols[i]:
-            # Use placeholders for each stage indicator
-            stage_indicators.append({
-                "name": stage,
-                "placeholder": st.empty(),
-                "status": "waiting"
-            })
-            
-            # Set initial waiting state
-            stage_indicators[i]["placeholder"].markdown(f"""
-                <div style="text-align: center;">
-                    <div style="font-size: 1.5rem;">⏳</div>
-                    <div style="font-weight: 500;">{stage}</div>
-                    <div style="font-size: 0.8rem;">Waiting</div>
-                </div>
-            """, unsafe_allow_html=True)
-    
-    # Log container (if enabled)
-    log_placeholder = None
-    if show_agent_details:
-        log_placeholder = st.empty()
-        st.session_state.agent_logs = []
-    
-    # Track overall progress
-    progress_value = 0.0
-    start_time = time.time()
-    
-    # Progress callback that updates placeholders
-    def update_progress(progress, message):
-        """Update progress indicators in place."""
-        nonlocal progress_value
-        progress_value = progress
-        
-        # Update progress bar
-        progress_placeholder.progress(progress)
-        
-        # Filter out chunk-level messages for cleaner UI
-        is_chunk_message = any(term in message.lower() for term in 
-                              ['chunk', 'processing chunk', 'extracting from chunk'])
-        
-        # Only update status text for high-level messages
-        if not is_chunk_message:
-            status_text_placeholder.text(message)
-        
-        # Determine current stage based on progress value
-        current_stage = None
-        if progress <= 0.2:
-            current_stage = "Planning"
-        elif progress <= 0.5:
-            current_stage = "Extraction"
-        elif progress <= 0.65:
-            current_stage = "Aggregation"
-        elif progress <= 0.75:
-            current_stage = "Evaluation"
-        elif progress <= 0.85:
-            current_stage = "Formatting"
-        elif progress <= 1.0 and enable_reviewer:
-            current_stage = "Review"
-        
-        # Update stage indicators
-        for i, indicator in enumerate(stage_indicators):
-            stage = indicator["name"]
-            status = indicator["status"]
-            new_status = "waiting"
-            
-            # Determine new status
-            if stage == current_stage:
-                new_status = "working"
-            elif stages.index(stage) < stages.index(current_stage) if current_stage else False:
-                new_status = "complete"
-                
-            # Only update if status changed
-            if new_status != status:
-                stage_indicators[i]["status"] = new_status
-                
-                # Determine icon and color
-                if new_status == "complete":
-                    icon = "✅"
-                    color = "#20c997"
-                elif new_status == "working":
-                    icon = "🔄"
-                    color = "#ff9f43"
-                else:
-                    icon = "⏳"
-                    color = "#6c757d"
-                
-                # Update the placeholder with new status
-                indicator["placeholder"].markdown(f"""
-                    <div style="text-align: center;">
-                        <div style="font-size: 1.5rem;">{icon}</div>
-                        <div style="font-weight: 500; color: {color};">{stage}</div>
-                        <div style="font-size: 0.8rem;">{new_status.capitalize()}</div>
-                    </div>
-                """, unsafe_allow_html=True)
-        
-        # Add to logs if detailed logging is enabled
-        if show_agent_details and log_placeholder:
-            if not is_chunk_message or log_placeholder is None:
-                # Add the log entry
-                timestamp = time.strftime("%H:%M:%S")
-                log_entry = f"[{timestamp}] {message}"
-                st.session_state.agent_logs.append(log_entry)
-                
-                # Format logs
-                log_html = []
-                for entry in st.session_state.agent_logs[-20:]:  # Show last 20 logs
-                    entry_class = "log-entry"
-                    if "error" in entry.lower() or "failed" in entry.lower():
-                        entry_class += " status-error"
-                    elif "complete" in entry.lower() or "success" in entry.lower():
-                        entry_class += " status-complete"
-                        
-                    log_html.append(f'<div class="{entry_class}">{entry}</div>')
-                
-                # Update the log placeholder
-                log_placeholder.markdown("\n".join(log_html), unsafe_allow_html=True)
-    
-    try:
-        # Map UI detail level to config values
-        detail_map = {
-            "Essential": "essential",
-            "Standard": "standard",
-            "Comprehensive": "comprehensive"
-        }
-        
-        # Create configuration manager
-        config_manager = ConfigManager()
-        
-        # Create options dictionary
-        options = {
-            "crew_type": "issues",
-            "detail_level": detail_map.get(detail_level, "standard"),
-            "focus_areas": [area.lower() for area in focus_areas],
-            "user_instructions": user_instructions,
-            "min_chunks": num_chunks,
-            "max_chunk_size": len(document_text) // num_chunks if num_chunks > 0 else 10000,
-            "enable_reviewer": enable_reviewer
-        }
-        
-        logger.info(f"Starting document processing with options: {json.dumps(options, default=str)}")
-        
-
-        # Create the orchestrator directly using the factory function
-        orchestrator = OrchestratorFactory.create_orchestrator(
-            api_key=api_key,
-            model=selected_model,
-            temperature=temperature,
-            max_chunk_size=len(document_text) // num_chunks if num_chunks > 0 else 10000,
-            max_rpm=max_rpm,
-            verbose=show_agent_details,
-            config_manager=config_manager
-        )
-        
-        # Store LLM client for chat interface
-        st.session_state.llm_client = orchestrator.llm_client
-        
-        # Process document with progress tracking using the synchronous method
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
+    else:
         try:
-            # Run the async method in the event loop
-            result = loop.run_until_complete(
-                orchestrator.process_document(
+            # Prepare options
+            options = {
+                "detail_level": detail_level.lower(),
+                "focus_areas": [area.lower() for area in focus_areas],
+                "user_instructions": user_instructions,
+                "min_chunks": num_chunks,
+                "enable_reviewer": enable_reviewer
+            }
+            
+            # Create analyzer
+            start_time = time.time()
+            
+            if architecture == "LangChain":
+                # Use our new LangChain implementation
+                analyzer = LangChainIssuesAnalyzer(
+                    api_key=api_key,
+                    model=selected_model,
+                    temperature=temperature,
+                    verbose=debug_mode
+                )
+                
+                # Process document
+                result = analyzer.process_document_sync(
                     document_text,
                     options=options,
-                    progress_callback=update_progress
+                    progress_callback=progress_callback
                 )
-            )
-        finally:
-            # Always close the loop
-            loop.close()
-        
-        # Show raw result in debug mode
-        if debug_mode:
-            with st.expander("Debug: Raw Result Structure", expanded=False):
-                st.json(result)
-        
-        # Store document info for chat
-        if "_metadata" in result and "document_info" in result["_metadata"]:
-            st.session_state.document_info = result["_metadata"]["document_info"]
-        
-        # Store results in session state
-        st.session_state.agent_result = result
-        st.session_state.processing_complete = True
-        st.session_state.processing_time = time.time() - start_time
-        
-        # Clear progress display
-        progress_placeholder.empty()
-        status_text_placeholder.empty()
-        for indicator in stage_indicators:
-            indicator["placeholder"].empty()
-        if log_placeholder:
-            log_placeholder.empty()
-        
-        # Display results
-        display_results(st.session_state.agent_result, st.session_state.processing_time)
-        
-    except Exception as e:
-        # Clear progress display
-        progress_placeholder.empty()
-        status_text_placeholder.empty()
-        for indicator in stage_indicators:
-            indicator["placeholder"].empty()
-        if log_placeholder:
-            log_placeholder.empty()
-        
-        # Log the error
-        logger.error(f"Error processing document: {str(e)}")
-        logger.error(traceback.format_exc())
-        
-        # Display error
-        st.error(f"Error processing document: {str(e)}")
-        
-        with st.expander("Technical Error Details"):
-            st.code(traceback.format_exc())
-        
-        # Update session state
-        st.session_state.processing_complete = False
-        st.session_state.agent_result = {"error": str(e)}
-
-# Function to display results
-def display_results(result, processing_time):
-    """Display the processing results with improved result handling."""
-    # Handle error results
-    if isinstance(result, dict) and "error" in result:
-        st.error(f"Error during processing: {result['error']}")
-        return
-    if isinstance(formatted_report, str) and ("<html" in formatted_report.lower() or "<div" in formatted_report.lower()):
-        # Display as HTML
-        st.markdown(formatted_report, unsafe_allow_html=True)
-    else:
-        # Display as text or other format
-        st.markdown(formatted_report)
-    # Extract the formatted report
-    formatted_report = None
-    if isinstance(result, dict) and "formatted_report" in result:
-        formatted_report = result["formatted_report"]
-    elif isinstance(result, str):
-        formatted_report = result
-    
-    # Save the result to a file
-    if formatted_report:
-        saved_filepath = save_output_to_file(formatted_report)
-    else:
-        saved_filepath = save_output_to_file(result)
-    
-    # Show success message
-    st.success(f"Analysis completed in {processing_time:.2f} seconds")
-    
-    # Extract review information
-    review_result = None
-    if isinstance(result, dict) and "review_result" in result:
-        review_result = result["review_result"]
-    
-    # Create tabs for different views
-    result_tabs = st.tabs(["Report", "Chat with Document", "Technical Info"])
-    
-    with result_tabs[0]:
-        st.subheader("Issues Identification Results")
-        
-        # Add review feedback if available
-        if review_result and isinstance(review_result, dict):
-            # Show assessment scores if available
-            assessment = review_result.get("assessment", {})
-            if assessment and isinstance(assessment, dict):
-                st.info("Analysis Quality Assessment")
-                
-                # Count metrics to arrange in columns
-                metrics = [(k.replace("_score", "").replace("_", " ").title(), v) 
-                          for k, v in assessment.items() 
-                          if isinstance(v, (int, float))]
-                
-                if metrics:
-                    metric_cols = st.columns(len(metrics))
-                    for i, (key, value) in enumerate(metrics):
-                        metric_cols[i].metric(key, f"{value}/5")
-                
-                # Show summary assessment
-                if "summary" in review_result:
-                    with st.expander("Review Feedback", expanded=False):
-                        st.markdown(f"**{review_result['summary']}**")
-                        
-                        # Show improvement suggestions if available
-                        suggestions = review_result.get("improvement_suggestions", [])
-                        if suggestions and isinstance(suggestions, list):
-                            st.markdown("### Improvement Suggestions")
-                            for suggestion in suggestions:
-                                if isinstance(suggestion, dict):
-                                    st.markdown(f"- **{suggestion.get('area', 'General')}**: {suggestion.get('suggestion', '')}")
-        
-        # Display formatted result
-        if formatted_report:
-            # Check if it's HTML
-            if isinstance(formatted_report, str) and ("<html" in formatted_report.lower() or "<div" in formatted_report.lower()):
-                # Display as HTML
-                st.markdown(formatted_report, unsafe_allow_html=True)
             else:
-                # Display as text or other format
-                st.markdown(formatted_report)
-        else:
-            # Use the result formatting utility
-            enhanced_html = enhance_result_display(result, "issues", detail_level.lower())
-            st.markdown(enhanced_html, unsafe_allow_html=True)
-        
-        # Download option
-        st.divider()
-        create_download_button(result, os.path.basename(saved_filepath))
-    
-    with result_tabs[1]:
-        st.subheader("Chat about this Issues Report")
-        
-        # Use the chat interface
-        display_chat_interface(
-            llm_client=st.session_state.llm_client,
-            document_text=document_text,
-            summary_text=formatted_report or json.dumps(result, indent=2),
-            document_info=st.session_state.document_info
-        )
-    
-    with result_tabs[2]:
-        st.subheader("Technical Information")
-        
-        # Document stats if available
-        document_info = st.session_state.document_info
-        if document_info and isinstance(document_info, dict) and "basic_stats" in document_info:
-            stats = document_info["basic_stats"]
-            st.markdown("### Document Statistics")
-            
-            # Create columns for stats
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Word Count", stats.get("word_count", 0))
-                st.metric("Paragraphs", stats.get("paragraph_count", 0))
-            with col2:
-                st.metric("Sentences", stats.get("sentence_count", 0))
-                st.metric("Characters", stats.get("char_count", 0))
-            with col3:
-                st.metric("Est. Tokens", stats.get("estimated_tokens", 0))
-                st.metric("Chunks Processed", num_chunks)
-        
-        # Technical configuration details
-        st.markdown("### Analysis Configuration")
-        tech_details = {
-            "model_used": selected_model,
-            "temperature": temperature,
-            "detail_level": detail_level,
-            "document_length": len(document_text),
-            "number_of_chunks": num_chunks,
-            "calculated_chunk_size": len(document_text) // num_chunks,
-            "max_rpm": max_rpm,
-            "processing_time_seconds": round(processing_time, 2),
-            "output_file": saved_filepath,
-            "reviewer_enabled": enable_reviewer,
-            "user_preferences": {
-                "user_instructions": user_instructions if user_instructions else "None provided",
-                "focus_areas": focus_areas
-            }
-        }
-        
-        # Display in a collapsible section
-        with st.expander("Configuration Details", expanded=False):
-            st.json(tech_details)
-        
-        # Show plan if available
-        if isinstance(result, dict) and "_metadata" in result and "plan" in result["_metadata"]:
-            st.markdown("### Agent Plan")
-            with st.expander("Planner-Generated Instructions", expanded=False):
-                st.json(result["_metadata"]["plan"])
-        
-        # Additional metadata
-        if isinstance(result, dict) and "_metadata" in result:
-            metadata = result["_metadata"]
-            # Remove plan and document_info to avoid duplication
-            metadata_copy = metadata.copy()
-            if "plan" in metadata_copy:
-                del metadata_copy["plan"]
-            if "document_info" in metadata_copy:
-                del metadata_copy["document_info"]
+                # Use the original CrewAI implementation for comparison
+                from orchestrator_factory import OrchestratorFactory
                 
-            if metadata_copy:
-                st.markdown("### Processing Metadata")
-                with st.expander("Processing Stats", expanded=False):
-                    st.json(metadata_copy)
+                orchestrator = OrchestratorFactory.create_orchestrator(
+                    api_key=api_key,
+                    model=selected_model,
+                    temperature=temperature,
+                    verbose=debug_mode
+                )
+                
+                # Process document
+                result = orchestrator.process_document_sync(
+                    document_text,
+                    options=options,
+                    progress_callback=progress_callback
+                )
+            
+            # Calculate execution time
+            execution_time = time.time() - start_time
+            
+            # Clear progress
+            progress_bar.empty()
+            status_text.empty()
+            
+            # Show results
+            st.header("Analysis Results")
+            st.success(f"Analysis completed in {execution_time:.2f} seconds")
+            
+            # Extract HTML content if available
+            html_content = None
+            if isinstance(result, dict) and "formatted_report" in result:
+                html_content = result["formatted_report"]
+            elif isinstance(result, str) and ("<div" in result or "<html" in result):
+                html_content = result
+            
+            # Display the formatted report
+            if html_content:
+                st.components.v1.html(html_content, height=800, scrolling=True)
+            else:
+                # Fallback to displaying raw result
+                st.json(result)
+            
+            # Show review information if available
+            if isinstance(result, dict) and "review_result" in result:
+                review = result["review_result"]
+                st.subheader("Quality Assessment")
+                
+                if isinstance(review, dict):
+                    # Extract assessment scores
+                    assessment = review.get("assessment", {})
+                    if assessment and isinstance(assessment, dict):
+                        # Display metrics
+                        metrics = [(k.replace("_score", "").replace("_", " ").title(), v) 
+                                for k, v in assessment.items() 
+                                if isinstance(v, (int, float))]
+                        
+                        if metrics:
+                            metric_cols = st.columns(len(metrics))
+                            for i, (key, value) in enumerate(metrics):
+                                metric_cols[i].metric(key, f"{value}/5")
+                    
+                    # Show summary assessment
+                    if "summary" in review:
+                        st.info(review["summary"])
+                    
+                    # Show improvement suggestions
+                    if "improvement_suggestions" in review and isinstance(review["improvement_suggestions"], list):
+                        st.subheader("Suggested Improvements")
+                        for suggestion in review["improvement_suggestions"]:
+                            if isinstance(suggestion, dict):
+                                st.markdown(f"- **{suggestion.get('area', 'General')}**: {suggestion.get('suggestion', '')}")
+                            elif isinstance(suggestion, str):
+                                st.markdown(f"- {suggestion}")
+            
+            # Show debug information
+            if debug_mode:
+                st.subheader("Debug Information")
+                
+                # Add tabs for different debug views
+                debug_tabs = st.tabs(["Raw Result", "Metadata", "Plan"])
+                
+                with debug_tabs[0]:
+                    st.json(result)
+                
+                with debug_tabs[1]:
+                    if isinstance(result, dict) and "_metadata" in result:
+                        st.json(result["_metadata"])
+                    else:
+                        st.warning("No metadata available")
+                
+                with debug_tabs[2]:
+                    if isinstance(result, dict) and "_metadata" in result and "plan" in result["_metadata"]:
+                        st.json(result["_metadata"]["plan"])
+                    else:
+                        st.warning("No plan available")
+                
+        except Exception as e:
+            # Show error
+            st.error(f"Error during analysis: {str(e)}")
+            
+            # Show stack trace in debug mode
+            if debug_mode:
+                st.expander("Error Details").code(traceback.format_exc())
+            
+            # Clear progress
+            progress_bar.empty()
+            status_text.empty()
 
-# Run when process button is clicked
-if process_button:
-    # Reset processing flags
-    st.session_state.processing_complete = False
-    st.session_state.agent_result = None
+# Instructions
+with st.expander("How to Use This Test Page"):
+    st.markdown("""
+    ### Instructions
     
-    # Process the document
-    process_document()
+    1. **Input Document**: Upload a file, paste text, or use the sample document
+    2. **Configure Settings**: Adjust settings in the sidebar
+    3. **Analyze**: Click the "Analyze Document" button
+    4. **Review Results**: Examine the analysis report
+    
+    ### Testing Notes
+    
+    - Try different detail levels to see how the analysis changes
+    - Use focus areas to target specific types of issues
+    - Compare the LangChain implementation with the original CrewAI implementation
+    - Use debug mode to see raw outputs and processing logs
+    
+    ### Troubleshooting
+    
+    - If you encounter errors, check the API key is set correctly
+    - Verify the configuration settings in your config files
+    - Look for detailed error messages in the debug log
+    """)
 
-# If results are already available, display them
-elif st.session_state.processing_complete and st.session_state.agent_result:
-    display_results(st.session_state.agent_result, st.session_state.processing_time)
-
-# Footer with implementation note
-st.markdown("---")
-st.markdown("""
-<div style="text-align: center;">
-    <p>🚀 <strong>New Architecture</strong> - Using the streamlined multi-agent system</p>
-</div>
-""", unsafe_allow_html=True)
+# Add information about the architecture
+with st.sidebar.expander("About This Implementation"):
+    st.markdown("""
+    ### LangChain Implementation
+    
+    This test page uses a LangChain-based implementation of the issues analysis pipeline. Key features:
+    
+    - **Improved Architecture**: Uses the enhanced ProcessingContext, agents, and error handling
+    - **LangChain Integration**: Leverages LangChain's LLM integration capabilities
+    - **Pipeline Approach**: Maintains the same sequential processing stages as the original
+    - **Agent Reuse**: Reuses your improved agent implementations with a LangChain adapter
+    
+    ### Components Used
+    
+    - **ProcessingContext**: Shared state container for the pipeline
+    - **PlannerAgent**: Creates tailored instructions for other agents
+    - **ExtractorAgent**: Finds comprehensive information from document chunks
+    - **AggregatorAgent**: Combines and deduplicates extracted items
+    - **EvaluatorAgent**: Assesses importance and organizes by priority
+    - **FormatterAgent**: Creates well-structured reports for Streamlit
+    - **ReviewerAgent**: Performs final quality assessment
+    """)

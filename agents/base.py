@@ -1,21 +1,23 @@
 """
-Base agent module for Better Notes with cleaner architecture.
+Enhanced BaseAgent for Better Notes with improved error handling and JSON parsing.
 Provides the foundation for all specialized agents in the system.
 """
 
 import logging
 import json
+import re
+import time
+import traceback
 from typing import Dict, Any, Optional, List, Union
 from datetime import datetime
-import asyncio
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
 class BaseAgent:
     """
-    Base class for all specialized agents in Better Notes.
-    Simplified with clearer configuration access and improved error handling.
+    Enhanced base class for all specialized agents in Better Notes.
+    Features improved error handling, JSON parsing, and logging.
     """
     
     def __init__(
@@ -30,7 +32,7 @@ class BaseAgent:
         max_rpm: int = 10
     ):
         """
-        Initialize a base agent with simpler configuration access.
+        Initialize a base agent.
         
         Args:
             llm_client: LLM client for API calls
@@ -56,21 +58,52 @@ class BaseAgent:
         else:
             # Import here to avoid circular imports
             from config_manager import ConfigManager
-            self.config_manager = ConfigManager()
+            self.config_manager = ConfigManager.get_instance()
         
         # Load config if not provided
-        self.config = config if config else self.config_manager.get_config(crew_type)
+        if config is not None:
+            self.config = config
+            logger.info(f"{self.agent_type} agent using provided config with {len(config)} keys")
+        else:
+            self.config = self.config_manager.get_config(crew_type)
+            logger.info(f"{self.agent_type} agent loaded config for {crew_type}")
+        
+        # Validate important config sections
+        self._validate_config()
         
         # Execution tracking
         self.stats = {
             "runs": 0,
             "total_time": 0,
             "avg_time": 0,
-            "last_run": None
+            "last_run": None,
+            "errors": 0
         }
         
         if self.verbose:
             logger.info(f"Initialized {self.agent_type} agent for {self.crew_type} crew")
+    
+    def _validate_config(self):
+        """Validate important config sections."""
+        if not isinstance(self.config, dict):
+            logger.error(f"Invalid config for {self.agent_type} agent: not a dictionary")
+            self.config = {}
+            return
+            
+        if "workflow" not in self.config:
+            logger.warning(f"Missing 'workflow' in config for {self.agent_type} agent")
+            self.config["workflow"] = {}
+            
+        if "agent_roles" not in self.config.get("workflow", {}):
+            logger.warning(f"Missing 'agent_roles' in workflow for {self.agent_type} agent")
+            self.config["workflow"]["agent_roles"] = {}
+            
+        if self.agent_type not in self.config.get("workflow", {}).get("agent_roles", {}):
+            logger.warning(f"No configuration for {self.agent_type} agent in agent_roles")
+            self.config["workflow"]["agent_roles"][self.agent_type] = {
+                "description": f"{self.agent_type.capitalize()} Agent",
+                "primary_task": f"Process {self.crew_type} data"
+            }
     
     async def process(self, context):
         """
@@ -199,7 +232,7 @@ class BaseAgent:
         # Add output schema if available
         if schema_info:
             prompt += schema_info
-            prompt += "\n\nYour response MUST follow the specified output schema."
+            prompt += "\n\nYour response MUST follow the specified output schema. Return ONLY valid JSON without explanation."
         
         # Ensure prompt doesn't exceed max size
         return self.truncate_text(prompt, 8000)
@@ -285,6 +318,7 @@ class BaseAgent:
             yield
         except Exception as e:
             logger.error(f"Error in {self.agent_type} agent: {str(e)}")
+            logger.error(traceback.format_exc())
             execution_time = (datetime.now() - start_time).total_seconds()
             self._update_stats(execution_time, error=str(e))
             raise
@@ -294,8 +328,7 @@ class BaseAgent:
     
     async def execute_task(self, context) -> Any:
         """
-        Execute a task using this agent.
-        Uses execution tracking for monitoring.
+        Execute a task using this agent with improved error handling.
         
         Args:
             context: ProcessingContext object or dict
@@ -316,20 +349,24 @@ class BaseAgent:
             # Execute based on whether we need structured output
             if output_schema and hasattr(self.llm_client, 'generate_structured_output'):
                 # Use structured output if supported
-                result = await self.llm_client.generate_structured_output(prompt, output_schema)
+                try:
+                    result = await self.llm_client.generate_structured_output(prompt, output_schema)
+                    logger.info(f"{self.agent_type} agent generated structured output")
+                    return result
+                except Exception as e:
+                    logger.warning(f"Error generating structured output: {e}, falling back to standard completion")
+                    # Fall back to standard completion with manual parsing
+                    result = await self.llm_client.generate_completion_async(prompt)
+                    return self.parse_llm_json(result, output_schema)
             else:
                 # Use standard completion
                 result = await self.llm_client.generate_completion_async(prompt)
                 
                 # Try to parse as JSON if we have a schema
                 if output_schema and isinstance(result, str):
-                    try:
-                        result = self.parse_llm_json(result)
-                    except:
-                        if self.verbose:
-                            logger.warning(f"{self.agent_type} agent response could not be parsed as JSON")
-            
-            return result
+                    return self.parse_llm_json(result, output_schema)
+                
+                return result
     
     def _update_stats(self, execution_time, error=None):
         """
@@ -344,16 +381,16 @@ class BaseAgent:
         self.stats["total_time"] += execution_time
         self.stats["avg_time"] = self.stats["total_time"] / self.stats["runs"]
         
+        # Track errors
+        if error:
+            self.stats["errors"] = self.stats.get("errors", 0) + 1
+        
         # Log execution stats periodically
         if self.verbose and self.stats["runs"] % 5 == 0:
             logger.info(
                 f"{self.agent_type.title()} agent stats: {self.stats['runs']} runs, "
-                f"avg time: {self.stats['avg_time']:.2f}s"
+                f"avg time: {self.stats['avg_time']:.2f}s, errors: {self.stats.get('errors', 0)}"
             )
-        
-        # Log errors
-        if error and self.verbose:
-            logger.error(f"{self.agent_type.title()} agent execution error: {error}")
     
     def truncate_text(self, text: str, max_length: int = None) -> str:
         """
@@ -399,61 +436,105 @@ class BaseAgent:
         
         return truncated
     
-    def parse_llm_json(self, text, default_value=None):
+    def parse_llm_json(self, text: str, default_schema: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Parse JSON from LLM response with fallbacks.
+        Parse JSON from LLM response with improved error handling.
         
         Args:
             text: Text containing JSON
-            default_value: Default value to return if parsing fails
+            default_schema: Default schema for fallback
             
         Returns:
-            Parsed JSON object or default value
+            Parsed JSON object
         """
         if not text:
-            return default_value or {}
-            
-        # Try direct parsing first
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            pass
+            logger.warning(f"{self.agent_type} agent received empty response")
+            return {} if default_schema is None else self._create_schema_skeleton(default_schema)
         
-        # Try to extract JSON from text with brace matching
+        # Log basic info without full text to avoid cluttering logs
+        logger.info(f"{self.agent_type} agent parsing JSON response of length {len(text)}")
+        
+        # Try direct JSON parsing first (most common case)
         try:
-            # Find outermost braces
-            start = text.find('{')
-            if start >= 0:
-                brace_count = 1
-                for i in range(start + 1, len(text)):
-                    if text[i] == '{':
-                        brace_count += 1
-                    elif text[i] == '}':
-                        brace_count -= 1
-                        if brace_count == 0:
-                            end = i + 1
-                            return json.loads(text[start:end])
-        except:
-            pass
-            
-        # Try fixing common JSON issues
+            parsed = json.loads(text)
+            logger.info(f"{self.agent_type} agent successfully parsed JSON directly")
+            return parsed
+        except json.JSONDecodeError as e:
+            logger.warning(f"JSON parse error at position {e.pos}: {e}")
+        
+        # Try to extract JSON from markdown code blocks
         try:
-            # Fix unquoted keys
-            fixed = re.sub(r'(\s*)(\w+)(\s*):(\s*)', r'\1"\2"\3:\4', text)
+            json_block_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
+            if json_block_match:
+                extracted_json = json_block_match.group(1).strip()
+                parsed = json.loads(extracted_json)
+                logger.info(f"{self.agent_type} agent parsed JSON from code block")
+                return parsed
+        except Exception as e:
+            logger.warning(f"Code block extraction failed: {e}")
+        
+        # Try to extract JSON object with regex
+        try:
+            json_object_match = re.search(r"({[\s\S]*})", text)
+            if json_object_match:
+                extracted_json = json_object_match.group(1).strip()
+                parsed = json.loads(extracted_json)
+                logger.info(f"{self.agent_type} agent parsed JSON from regex extraction")
+                return parsed
+        except Exception as e:
+            logger.warning(f"JSON object extraction failed: {e}")
+        
+        # Try to fix common JSON errors
+        try:
+            # Fix unquoted keys with regex
+            fixed_text = re.sub(r'(\s*)([a-zA-Z0-9_]+)(\s*):(\s*)', r'\1"\2"\3:\4', text)
             # Fix trailing commas
-            fixed = re.sub(r',(\s*[}\]])', r'\1', text)
-            return json.loads(fixed)
-        except:
-            pass
-            
-        # Try extracting JSON using regex
-        try:
-            import re
-            json_match = re.search(r'({[\s\S]*})', text)
-            if json_match:
-                return json.loads(json_match.group(1))
-        except:
-            pass
+            fixed_text = re.sub(r',(\s*[}\]])', r'\1', fixed_text)
+            # Try parsing again
+            parsed = json.loads(fixed_text)
+            logger.info(f"{self.agent_type} agent parsed JSON after fixing common errors")
+            return parsed
+        except Exception as e:
+            logger.warning(f"JSON fixing failed: {e}")
         
-        # If all parsing fails, return default
-        return default_value or {}
+        # If all parsing fails, return schema skeleton or empty dict
+        if default_schema:
+            logger.warning(f"All JSON parsing methods failed, returning schema skeleton")
+            return self._create_schema_skeleton(default_schema)
+        
+        logger.warning(f"All JSON parsing methods failed, returning empty dict")
+        return {}
+    
+    def _create_schema_skeleton(self, schema: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create a minimal valid structure based on schema.
+        
+        Args:
+            schema: Schema dictionary
+            
+        Returns:
+            Skeleton dictionary matching schema
+        """
+        result = {}
+        
+        for key, value_info in schema.items():
+            # Handle different schema formats
+            if isinstance(value_info, dict):
+                # Nested schema
+                result[key] = self._create_schema_skeleton(value_info)
+            elif isinstance(value_info, str):
+                # String type description
+                type_str = value_info.lower()
+                if "array" in type_str or "list" in type_str:
+                    result[key] = []
+                elif "number" in type_str or "integer" in type_str:
+                    result[key] = 0
+                elif "boolean" in type_str:
+                    result[key] = False
+                else:
+                    result[key] = ""
+            else:
+                # Default to empty string
+                result[key] = ""
+                
+        return result

@@ -1,10 +1,11 @@
 """
-Planner Agent - Creates optimized, document-aware instructions for specialized agents.
-Simplified implementation that leverages the new BaseAgent architecture.
+Enhanced Planner Agent for Better Notes with improved error handling and JSON parsing.
+Creates optimized, document-aware instructions for specialized agents.
 """
 
 import json
 import logging
+import traceback
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
@@ -14,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 class PlannerAgent(BaseAgent):
     """
-    Agent that creates tailored plans for document analysis.
-    Simplified implementation with cleaner configuration access and improved error handling.
+    Enhanced Planner agent that creates tailored plans for document analysis.
+    Features improved error handling, JSON parsing, and logging.
     """
     
     def __init__(
@@ -39,6 +40,8 @@ class PlannerAgent(BaseAgent):
             max_chunk_size=max_chunk_size,
             max_rpm=max_rpm
         )
+        
+        logger.info(f"PlannerAgent initialized for {crew_type}")
     
     async def process(self, context):
         """
@@ -50,17 +53,38 @@ class PlannerAgent(BaseAgent):
         Returns:
             Planning result with instructions for each agent
         """
-        # Execute planning
-        plan = await self.create_plan(
-            document_info=context.document_info,
-            user_preferences=context.options,
-            crew_type=self.crew_type
-        )
+        logger.info("PlannerAgent starting planning process")
         
-        # Store plan in context
-        context.agent_instructions = plan
-        
-        return plan
+        try:
+            # Execute planning
+            document_info = getattr(context, 'document_info', {})
+            options = getattr(context, 'options', {})
+            
+            # Create the plan
+            plan = await self.create_plan(
+                document_info=document_info,
+                user_preferences=options,
+                crew_type=self.crew_type
+            )
+            
+            # Store plan in context
+            context.agent_instructions = plan
+            
+            # Log success
+            logger.info(f"PlannerAgent created plan with instructions for {len(plan)} agents")
+            
+            return plan
+            
+        except Exception as e:
+            logger.error(f"Error in planning: {e}")
+            logger.error(traceback.format_exc())
+            
+            # Create fallback plan in case of error
+            fallback_plan = self._create_basic_plan(self._get_agent_types())
+            context.agent_instructions = fallback_plan
+            
+            logger.info(f"Created fallback plan due to error")
+            return fallback_plan
     
     async def create_plan(
         self, 
@@ -88,24 +112,35 @@ class PlannerAgent(BaseAgent):
                 "document_info": document_info,
                 "user_preferences": user_preferences,
                 "crew_type": crew_type,
-                "agent_types": agent_types,
-                "issue_definition": self.config.get("issue_definition", {})
+                "agent_types": agent_types
             }
+            
+            # Add issue definition if applicable
+            if crew_type == "issues" and "issue_definition" in self.config:
+                planning_context["issue_definition"] = self.config["issue_definition"]
             
             # Execute the planning task
-            result = await self.execute_task(planning_context)
-            
-            # Ensure result is in the correct format
-            plan = self._normalize_plan_format(result, agent_types)
-            
-            # Add metadata
-            plan["_metadata"] = {
-                "created_at": datetime.now().isoformat(),
-                "crew_type": crew_type,
-                "detail_level": user_preferences.get("detail_level", "standard")
-            }
-            
-            return plan
+            try:
+                result = await self.execute_task(planning_context)
+                
+                # Ensure result is in the correct format
+                plan = self._normalize_plan_format(result, agent_types)
+                
+                # Add metadata
+                plan["_metadata"] = {
+                    "created_at": datetime.now().isoformat(),
+                    "crew_type": crew_type,
+                    "detail_level": user_preferences.get("detail_level", "standard")
+                }
+                
+                return plan
+                
+            except Exception as e:
+                logger.error(f"Error in create_plan: {e}")
+                logger.error(traceback.format_exc())
+                
+                # Create fallback plan in case of error
+                return self._create_basic_plan(agent_types)
     
     def _get_agent_types(self) -> List[str]:
         """
@@ -129,7 +164,7 @@ class PlannerAgent(BaseAgent):
     
     def _normalize_plan_format(self, plan_result: Any, agent_types: List[str]) -> Dict[str, Dict[str, str]]:
         """
-        Ensure the plan result is in the expected format.
+        Ensure the plan result is in the expected format with improved validation.
         
         Args:
             plan_result: Result from LLM planning
@@ -138,35 +173,50 @@ class PlannerAgent(BaseAgent):
         Returns:
             Normalized plan dictionary
         """
+        # Start with an empty plan
+        plan_dict = {}
+        
         # If result is a string, try to parse as JSON
         if isinstance(plan_result, str):
             try:
-                plan_dict = self.parse_llm_json(plan_result, {})
-            except:
-                # If JSON parsing fails, create a simple instruction-only plan
-                return self._create_basic_plan(agent_types)
-        else:
+                parsed_result = self.parse_llm_json(plan_result, {})
+                if isinstance(parsed_result, dict):
+                    plan_dict = parsed_result
+                else:
+                    logger.warning(f"Parsed result is not a dictionary: {type(parsed_result)}")
+            except Exception as e:
+                logger.error(f"Error parsing plan result: {e}")
+        elif isinstance(plan_result, dict):
             # Use result directly
-            plan_dict = plan_result if isinstance(plan_result, dict) else {}
+            plan_dict = plan_result
+        else:
+            logger.warning(f"Unexpected plan result type: {type(plan_result)}")
         
-        # Check if we have a valid plan for each agent type
+        # Validate plan structure for all required agent types
         for agent_type in agent_types:
-            if agent_type not in plan_dict or not isinstance(plan_dict[agent_type], dict):
-                # Create basic instruction for this agent
-                plan_dict[agent_type] = self._create_agent_instructions(agent_type)
-            else:
-                # Ensure required fields exist
+            # Skip if agent already has valid instructions
+            if agent_type in plan_dict and isinstance(plan_dict[agent_type], dict):
                 agent_plan = plan_dict[agent_type]
+                
+                # Ensure required fields exist
                 if "instructions" not in agent_plan:
+                    logger.warning(f"Missing instructions for {agent_type} in plan, adding default")
                     agent_plan["instructions"] = self._get_default_instructions(agent_type)
+                
                 if "emphasis" not in agent_plan:
-                    agent_plan["emphasis"] = ""
+                    agent_plan["emphasis"] = self._get_default_emphasis()
+                    
+            else:
+                # Create default instructions for this agent
+                logger.warning(f"Missing or invalid plan for {agent_type}, creating default")
+                plan_dict[agent_type] = self._create_agent_instructions(agent_type)
         
         return plan_dict
     
     def _create_basic_plan(self, agent_types: List[str]) -> Dict[str, Dict[str, str]]:
         """
         Create a basic plan with default instructions for each agent.
+        Used as a fallback when planning fails.
         
         Args:
             agent_types: List of agent types to include
@@ -174,7 +224,9 @@ class PlannerAgent(BaseAgent):
         Returns:
             Basic plan dictionary
         """
+        logger.info(f"Creating basic plan for {len(agent_types)} agent types")
         plan = {}
+        
         for agent_type in agent_types:
             plan[agent_type] = self._create_agent_instructions(agent_type)
         
@@ -281,9 +333,43 @@ class PlannerAgent(BaseAgent):
             if issue_def_text:
                 content += f"\n\n{issue_def_text}"
             
+            # Add user preferences if available
+            user_prefs = context.get("user_preferences", {})
+            if user_prefs:
+                content += "\n\nUSER PREFERENCES:\n"
+                
+                # Add detail level
+                detail_level = user_prefs.get("detail_level", "standard")
+                content += f"Detail Level: {detail_level}\n"
+                
+                # Add focus areas
+                focus_areas = user_prefs.get("focus_areas", [])
+                if focus_areas:
+                    content += f"Focus Areas: {', '.join(focus_areas)}\n"
+                
+                # Add custom instructions
+                custom_instructions = user_prefs.get("user_instructions", "")
+                if custom_instructions:
+                    content += f"Custom Instructions: {custom_instructions}\n"
+            
+            # Add document info if available
+            doc_info = context.get("document_info", {})
+            if doc_info:
+                content += "\n\nDOCUMENT CHARACTERISTICS:\n"
+                
+                # Add transcript info if available
+                is_transcript = doc_info.get("is_meeting_transcript", False)
+                content += f"Is Meeting Transcript: {is_transcript}\n"
+                
+                # Add key topics if available
+                if "preview_analysis" in doc_info and "key_topics" in doc_info["preview_analysis"]:
+                    topics = doc_info["preview_analysis"]["key_topics"]
+                    if topics:
+                        content += f"Key Topics: {', '.join(topics[:5])}\n"
+            
             content += "\n\nPLANNING TASK:\n"
-            content += "Create instructions for each agent type based on the document and user preferences.\n"
-            content += "For each agent, provide specific \"instructions\" and \"emphasis\" fields."
+            content += "Create personalized instructions for each agent type based on the document and user preferences.\n"
+            content += "For each agent, provide specific \"instructions\" and \"emphasis\" fields that are tailored to this particular document and analysis."
             
             return content
         
